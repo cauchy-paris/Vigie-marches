@@ -255,10 +255,12 @@ async function routeAnalyse(req, res, u) {
     res.writeHead(204, autorise ? { "Access-Control-Allow-Origin": autorise, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {});
     return res.end();
   }
-  if (req.method !== "POST") return json(res, 405, { erreur: "POST attendu" }, autorise);
-  if (!autorise) return json(res, 403, { erreur: "Origine non autorisée" });
-  let corps;
-  try { corps = JSON.parse(await lireCorps(req, 400000)); } catch (e) { return json(res, 400, { erreur: "Demande illisible" }, autorise); }
+  // GET : lecture mécanique seule (gratuite), pratique pour vérifier un RC depuis un navigateur
+  const lectureSimple = req.method === "GET" && u.searchParams.get("mode") !== "ia";
+  if (req.method !== "POST" && !lectureSimple) return json(res, 405, { erreur: "POST attendu" }, autorise);
+  if (!autorise && !lectureSimple) return json(res, 403, { erreur: "Origine non autorisée" });
+  let corps = {};
+  if (!lectureSimple) try { corps = JSON.parse(await lireCorps(req, 400000)); } catch (e) { return json(res, 400, { erreur: "Demande illisible" }, autorise); }
   const modeIA = u.searchParams.get("mode") === "ia";
   const iaDispo = !!process.env.ANTHROPIC_API_KEY;
   const cle = corps.cle ? (modeIA ? "ia:" : "rg:") + String(corps.cle).slice(0, 40) : "";
