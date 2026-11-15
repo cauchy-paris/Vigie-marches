@@ -171,6 +171,12 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .ia-qualifs span{border:1.5px solid var(--rouge);color:var(--rouge);background:var(--rouge-clair);border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:600}
 .lot-mt{color:var(--gris)}
 .ia-source{margin:0;font-size:12px;color:var(--gris)}
+.journal{position:fixed;right:16px;bottom:16px;z-index:60;width:min(420px,calc(100vw - 32px));background:var(--blanc);border:2px solid var(--bleu);border-top:6px solid var(--rouge);border-radius:10px;box-shadow:0 12px 36px rgba(13,34,87,.25);padding:14px 16px;display:grid;gap:10px}
+.journal h3{margin:0;font-size:15px;color:var(--bleu)}
+.journal-lignes{margin:0;padding-left:0;list-style:none;display:grid;gap:6px;font-size:13.5px;overflow-wrap:anywhere}
+.journal-lignes .ok{color:#14603a}
+.journal-lignes .ko{color:var(--rouge)}
+.journal .btn{justify-self:end}
 .ref{font-family:var(--f-mono);font-size:12px;color:var(--gris)}
 
 .pagination{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
@@ -323,6 +329,8 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
         <label class="btn" for="fichierImport">Restaurer une sauvegarde</label>
         <input type="file" id="fichierImport" accept=".json,application/json" hidden>
       </div>
+      <p class="note-docs" style="margin-top:12px">Dossiers de réponse : quand vous cliquez « J'y réponds », l'appli crée le dossier de la consultation et y dézippe le DCE. Dossier OneDrive choisi : <strong id="racineNom">…</strong></p>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" id="btnRacine" type="button">Choisir le dossier OneDrive</button></div>
     </div>
     <div id="listeSuivi" style="display:grid;gap:14px"></div>
   </section>
@@ -401,6 +409,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 "use strict";
 /* ====================================================================
@@ -603,7 +612,7 @@ const URL_RE=/https?:\/\/[^\s"'<>\\)]+/gi;
 const URL_IGNOREES=/telerecours|juradm|europa\.eu|legifrance|service-public|conseil-etat|economie\.gouv\.fr\/daj|w3\.org|schemas|xmlns|boamp\.journal-officiel/i;
 
 function analyserDonnees(brut){
-  const res={description:"",lieu:"",duree:"",montant:"",lots:[],cpv:[],urlDocs:null,urlDepot:null,urlProfil:null,refAcheteur:""};
+  const res={description:"",lieu:"",duree:"",montant:"",lots:[],cpv:[],urlDocs:null,urlDepot:null,urlProfil:null,refAcheteur:"",villeAcheteur:"",accordCadre:false};
   if(!brut) return res;
   let d; try{ d=typeof brut==="string"?JSON.parse(brut):brut; }catch(e){ return res; }
 
@@ -680,6 +689,17 @@ function analyserDonnees(brut){
   res.refAcheteur = (projet&&txt(premier(projet,"cbc:ID"))) || premierRe(d,/^(REF_MARCHE|numeroReference|REFERENCE_MARCHE|referenceMarche)$/i)||"";
   const docRefNoeud = premier(d,"cac:CallForTendersDocumentReference");
   res.refDocs = (docRefNoeud&&txt(premier(docRefNoeud,"cbc:ID")))||"";
+
+  // --- ville de l'acheteur (nom du dossier de réponse)
+  const cp=premier(d,"cac:ContractingParty"), idAch=cp&&txt(premier(cp,"cbc:ID"));
+  let ville="";
+  if(idAch) for(const o of tous(d,"efac:Company").flatMap(x=>Array.isArray(x)?x:[x])){
+    if(txt(premier(premier(o,"cac:PartyIdentification")||{},"cbc:ID"))===idAch){ ville=txt(premier(o,"cbc:CityName")); break; }
+  }
+  res.villeAcheteur = ville || premierRe(d,/^(cbc:CityName|VILLE|ville|commune)$/i) || "";
+  // --- accord-cadre
+  const brutTxt=typeof brut==="string"?brut:JSON.stringify(brut);
+  res.accordCadre = /"(fa-wo-rc|fa-w-rc|fa-mix)"|accord[- ]?cadre|ACCORD_CADRE"\s*:\s*\{|"accordCadre"\s*:\s*"?(true|oui)/i.test(brutTxt);
   return res;
 }
 function formaterMontant(v,devise){
@@ -900,6 +920,7 @@ function carte(m){
     b.onclick=()=>changerStatut(m,k);
     sts.append(b);
   }
+  if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"));
   c.append(el("div",{class:"pied"},docs,sts));
   const panneau=el("div",{class:"ia",hidden:true});
   const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du règlement de consultation");
@@ -1013,6 +1034,129 @@ function afficherAnalyse(m,atx,panneau,r){
     ia?" · ":null, ia?el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false)},"Voir la lecture sans IA"):null));
 }
 
+/* ====================================================================
+   Dossier de réponse dans OneDrive (dossier synchronisé du PC)
+   ==================================================================== */
+const FS_OK = typeof window.showDirectoryPicker==="function";
+function idb(){ return new Promise((ok,ko)=>{ const r=indexedDB.open("vigie",1); r.onupgradeneeded=()=>r.result.createObjectStore("kv"); r.onsuccess=()=>ok(r.result); r.onerror=()=>ko(r.error); }); }
+async function idbGet(k){ try{ const db=await idb(); return await new Promise(ok=>{ const r=db.transaction("kv").objectStore("kv").get(k); r.onsuccess=()=>ok(r.result); r.onerror=()=>ok(null); }); }catch(e){ return null; } }
+async function idbSet(k,v){ try{ const db=await idb(); await new Promise(ok=>{ const t=db.transaction("kv","readwrite"); t.objectStore("kv").put(v,k); t.oncomplete=ok; t.onerror=ok; }); }catch(e){} }
+async function dossierRacine(choisir){
+  let h=choisir?null:await idbGet("racine");
+  if(h){
+    if(await h.queryPermission({mode:"readwrite"})==="granted") return h;
+    if(await h.requestPermission({mode:"readwrite"})==="granted") return h;
+  }
+  h=await window.showDirectoryPicker({id:"vigie-reponses",mode:"readwrite",startIn:"documents"});
+  await idbSet("racine",h); majRacine();
+  return h;
+}
+async function majRacine(){
+  const e=$("#racineNom"); if(!e) return;
+  if(!FS_OK){ e.textContent="non disponible dans ce navigateur (utilisez Chrome ou Edge sur PC)"; return; }
+  const h=await idbGet("racine"); e.textContent=h?"« "+h.name+" »":"pas encore choisi";
+}
+const propre=t=>(t||"").normalize("NFC").replace(/[<>:"\/\\|?*\x00-\x1f]/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,"");
+const MOTS_VIDES_NOM=new Set("de des du la le les l d et a au aux en pour sur dans un une par avec relatif relatifs relative relatives concernant marche marches accord cadre prestations prestation travaux services fournitures objet lot lots".split(" "));
+function designation(objet){
+  const mots=(objet||"").replace(/[’']/g," ").split(/[^\p{L}\p{N}-]+/u).filter(w=>w.length>1&&!MOTS_VIDES_NOM.has(w.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")));
+  let r=""; for(const w of mots){ if((r+" "+w).length>40) break; r+=(r?" ":"")+w; }
+  return r||"Consultation";
+}
+function nomDossier(m){
+  let d="";
+  if(m.limite){ const p=Object.fromEntries(new Intl.DateTimeFormat("fr-FR",{timeZone:"Europe/Paris",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hourCycle:"h23"}).formatToParts(new Date(m.limite)).map(x=>[x.type,x.value])); d=p.year+p.month+p.day+p.hour; }
+  else d=new Date().toLocaleDateString("sv-SE").replace(/-/g,"")+"00";
+  const texte=[m.objet,m.description,m.procedure].join(" ");
+  const ac=m.accordCadre||/accord[- ]?cadre/i.test(texte);
+  const type=ac?"AC":/appel d.offres/i.test(m.procedure||"")?"AO":"MAPA";
+  const ce=corpsEtat(m);
+  const sujet=ac&&ce.length?ce.slice(0,2).join("-"):designation(m.objet);
+  const ville=m.villeAcheteur||(m.lieu||"").replace(/^\d{5}\s*/,"")||(m.deps[0]?NOM_DEP[m.deps[0]]||m.deps[0]:"");
+  return propre([d,type,sujet,ville].filter(Boolean).join("_")).slice(0,120);
+}
+// Noms de fichiers des ZIP : UTF-8 si possible, sinon page de code DOS 850 (archives Windows)
+const CP850="ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´­±‗¾¶§÷¸°¨·¹³²■ ";
+function nomZip(octets){
+  try{ return new TextDecoder("utf-8",{fatal:true}).decode(octets); }catch(e){}
+  let r=""; for(const b of octets) r+=b<128?String.fromCharCode(b):CP850[b-128]; return r;
+}
+let journalEl=null;
+function journal(titre){
+  if(journalEl) journalEl.remove();
+  const lignes=el("ol",{class:"journal-lignes"});
+  const fermer=el("button",{class:"btn",type:"button",onclick:()=>{ journalEl.remove(); journalEl=null; }},"Fermer");
+  journalEl=el("div",{class:"journal",role:"status"},el("h3",{text:titre}),lignes,fermer);
+  document.body.append(journalEl);
+  return { ligne:(t,cls)=>{ const li=el("li",{class:cls||"",text:t}); lignes.append(li); return li; } };
+}
+let preparationEnCours=false;
+async function preparerDossier(m){
+  if(preparationEnCours) return;
+  if(!FS_OK){ toast("Création du dossier : utilisez Chrome ou Edge sur PC"); return; }
+  preparationEnCours=true;
+  const nom=nomDossier(m);
+  const J=journal("Dossier de réponse");
+  try{
+    let racine;
+    try{ racine=await dossierRacine(false); }
+    catch(e){ if(e.name==="AbortError"){ J.ligne("Aucun dossier choisi : rien n'a été créé.","ko"); return; } throw e; }
+    const dossier=await racine.getDirectoryHandle(nom,{create:true});
+    J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" »","ok");
+    // le DCE
+    let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
+    if(!atx) atx=atexoParRecherche(m);
+    if(!atx){
+      J.ligne("Le DCE de cette consultation ne peut pas être téléchargé automatiquement (plateforme sans retrait anonyme).","ko");
+      const lien=m.urlDocs||m.urlDepot||m.urlProfil||m.urlAvis;
+      J.ligne("").append(el("a",{href:lien,target:"_blank",rel:"noopener"},"Ouvrir la consultation pour télécharger le DCE"));
+      return;
+    }
+    const l=J.ligne("⏳ Téléchargement du DCE… (jusqu'à une minute si le serveur était en veille)");
+    const rep=await fetch(atx.dceAuto,{method:"GET"});
+    const type=rep.headers.get("content-type")||"";
+    if(!rep.ok||/text\/html/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; J.ligne("").append(el("a",{href:atx.dceAuto,target:"_blank",rel:"noopener"},"Voir le détail et le lien de retrait")); return; }
+    const cd=rep.headers.get("content-disposition")||"";
+    let nomFichier=decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i)||[])[1]||"")||(cd.match(/filename="?([^";]+)/i)||[])[1]||"DCE.zip";
+    nomFichier=propre(nomFichier)||"DCE.zip";
+    const blob=await rep.blob();
+    l.textContent="✓ DCE téléchargé ("+(blob.size/1048576).toFixed(1).replace(".",",")+" Mo)"; l.className="ok";
+    const sansAcc=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7e]/g,"_");
+    const ecrireFichier=async(rep,chemin,donnees)=>{
+      const parts=chemin.split("/").map(propre).filter(Boolean); let d=rep;
+      for(const p of parts.slice(0,-1)){ try{ d=await d.getDirectoryHandle(p,{create:true}); }catch(e){ d=await d.getDirectoryHandle(sansAcc(p),{create:true}); } }
+      const nomF=parts[parts.length-1]||"fichier";
+      let f; try{ f=await d.getFileHandle(nomF,{create:true}); }catch(e){ f=await d.getFileHandle(sansAcc(nomF),{create:true}); }
+      const w=await f.createWritable(); await w.write(donnees); await w.close();
+    };
+    if(!/zip/i.test(type)&&!/\.zip$/i.test(nomFichier)){ await ecrireFichier(dossier,nomFichier,blob); J.ligne("✓ Fichier enregistré : "+nomFichier,"ok"); return; }
+    const l2=J.ligne("⏳ Décompression…");
+    const dceDir=await dossier.getDirectoryHandle("DCE",{create:true});
+    let n=0;
+    const deziper=async(donnees,cible,profondeur)=>{
+      const zip=await JSZip.loadAsync(donnees,{decodeFileName:nomZip});
+      for(const e of Object.values(zip.files)){
+        if(e.dir) continue;
+        const contenu=await e.async("uint8array");
+        if(/\.zip$/i.test(e.name)&&profondeur<2){
+          // archive dans l'archive : dézippée dans un dossier du même nom
+          const parts=e.name.split("/").map(propre).filter(Boolean); let d=cible;
+          for(const p of parts.slice(0,-1)) d=await d.getDirectoryHandle(p,{create:true});
+          const sous=await d.getDirectoryHandle(parts[parts.length-1].replace(/\.zip$/i,""),{create:true});
+          try{ await deziper(contenu,sous,profondeur+1); continue; }catch(err){}
+        }
+        await ecrireFichier(cible,e.name,contenu); n++;
+        if(n%10===0) l2.textContent="⏳ Décompression… "+n+" fichiers";
+      }
+    };
+    try{ await deziper(blob,dceDir,0); l2.textContent="✓ DCE dézippé : "+n+" fichiers dans « "+nom+"/DCE »"; l2.className="ok"; }
+    catch(e){ await ecrireFichier(dossier,nomFichier,blob); l2.textContent="Archive non lisible ("+(e.message||e)+"), le fichier « "+nomFichier+" » est enregistré tel quel."; l2.className="ko"; }
+    J.ligne("OneDrive va synchroniser le dossier automatiquement.");
+  }catch(e){
+    J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
+  }finally{ preparationEnCours=false; }
+}
+
 function afficherListe(cont,items,vide){
   cont.innerHTML="";
   if(!items.length){ cont.append(el("div",{class:"etat",text:vide})); return; }
@@ -1022,11 +1166,11 @@ function afficherListe(cont,items,vide){
 }
 
 /* ---------- Statuts ---------- */
-function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}=m; return {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
+function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre}=m; return {villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
   if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
-  else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m)}; toast("« "+LIB_STATUT[k]+" » enregistré"); }
+  else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m)}; toast("« "+LIB_STATUT[k]+" » enregistré"); if(k==="reponse") preparerDossier(m); }
   if(!ecrire(CLE_STATUTS,statuts)) toast("Attention : ce navigateur bloque l'enregistrement local");
   document.querySelectorAll('.carte[data-id="'+CSS.escape(m.idweb)+'"]').forEach(c=>c.replaceWith(carte(m)));
   majCompteSuivis();
@@ -1136,6 +1280,8 @@ function changerVue(v){
 let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
 function init(){
+  majRacine();
+  const br=$("#btnRacine"); if(br) br.onclick=async()=>{ if(!FS_OK){ toast("Utilisez Chrome ou Edge sur PC"); return; } try{ await dossierRacine(true); toast("Dossier enregistré"); }catch(e){} };
   restaurerFiltres(); majSegments();
   // anciens choix enregistrés sans préfixe = regroupements métier
   etat.metiers.forEach((v,i)=>{ if(!/^[md]:/.test(v)) etat.metiers[i]="m:"+v; });

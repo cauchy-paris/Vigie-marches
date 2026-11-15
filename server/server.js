@@ -336,6 +336,12 @@ ${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline
 
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
+  // l'appli peut récupérer le DCE pour le ranger elle-même dans le dossier de réponse
+  if (u.pathname === "/dce" && req.headers.origin && ORIGINES.has(req.headers.origin)) {
+    res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Length");
+    res.setHeader("Vary", "Origin");
+  }
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
