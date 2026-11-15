@@ -203,6 +203,9 @@ async function trouverConsultation(origine, ref, objet, limite) {
   const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
   if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate) }, { extrait: tri[0] ? tri[0].texte.slice(0, 600) : "" });
   if (tri[0] && tri[0].okDate && tri[0].ratio >= 0.5 && (!tri[1] || tri[1].score < tri[0].score)) return tri[0];
+  // une seule consultation trouvée avec la même date limite que l'avis : c'est elle
+  const memeDate = tri.filter(x => x.okDate);
+  if (memeDate.length === 1) return memeDate[0];
   return null;
 }
 
