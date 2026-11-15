@@ -344,6 +344,7 @@ async function routeOneDrive(req, res, u) {
   try {
     const dossier = await onedrive.creerDossier(token, driveId, parentId, nom);
     r.webUrl = dossier.webUrl || "";
+    await onedrive.creerSousDossiers(token, driveId, dossier.id);
     // le DCE, si la plateforme permet le retrait anonyme
     const origine = String(c.origine || "");
     if (!origine) { r.dce = "absent"; return json(res, 200, r, autorise); }

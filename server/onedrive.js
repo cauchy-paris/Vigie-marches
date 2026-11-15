@@ -90,4 +90,14 @@ async function deposerDce(token, driveId, dossierId, nomArchive, buf) {
   return { fichiers: n, total: fichiers.length, erreurs };
 }
 
-module.exports = { creerDossier, deposerDce, envoyer, propre };
+// Sous-dossiers de travail créés avec chaque dossier de réponse
+const SOUS_DOSSIERS = ["01_Analyse", "02_Candidature", "03_Offre", "04_Contrôle"];
+async function creerSousDossiers(token, driveId, dossierId) {
+  const base = "/drives/" + encodeURIComponent(driveId) + "/items/" + encodeURIComponent(dossierId) + "/children";
+  for (const nom of SOUS_DOSSIERS) {
+    const rep = await graph(token, base, { method: "POST", json: { name: nom, folder: {}, "@microsoft.graph.conflictBehavior": "fail" } });
+    if (!rep.ok && rep.status !== 409) throw await erreurGraph(rep, "Sous-dossier " + nom);
+  }
+}
+
+module.exports = { creerDossier, creerSousDossiers, SOUS_DOSSIERS, deposerDce, envoyer, propre };

@@ -1180,7 +1180,8 @@ async function preparerDossier(m){
     try{ racine=await dossierRacine(false); }
     catch(e){ if(e.name==="AbortError"){ J.ligne("Aucun dossier choisi : rien n'a été créé.","ko"); return; } throw e; }
     const dossier=await racine.getDirectoryHandle(nom,{create:true});
-    J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" »","ok");
+    for(const sd of ["01_Analyse","02_Candidature","03_Offre","04_Contrôle"]){ try{ await dossier.getDirectoryHandle(sd,{create:true}); }catch(e){ await dossier.getDirectoryHandle(sd.normalize("NFD").replace(/[\u0300-\u036f]/g,""),{create:true}); } }
+    J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" », avec Analyse, Candidature, Offre et Contrôle","ok");
     // le DCE
     let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
     if(!atx) atx=atexoParRecherche(m);
@@ -1252,7 +1253,7 @@ async function preparerEnLigne(m,od){
   try{
     const rep=await fetch(SERVEUR_DCE+"/onedrive",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+jeton},body:JSON.stringify({driveId:od.driveId,parentId:od.id,dossier:nom,...params})});
     const r=await rep.json().catch(()=>({message:"Réponse illisible du serveur ("+rep.status+")"}));
-    if(r.webUrl){ l.textContent="✓ Dossier « "+nom+" » créé dans « "+od.nom+" » "; l.className="ok"; l.append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir dans OneDrive")); }
+    if(r.webUrl){ l.textContent="✓ Dossier « "+nom+" » créé dans « "+od.nom+" », avec Analyse, Candidature, Offre et Contrôle "; l.className="ok"; l.append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir dans OneDrive")); }
     if(!rep.ok){ (r.webUrl?J.ligne(""):l).textContent="✗ "+(r.message||"Erreur "+rep.status); if(!r.webUrl) l.className="ko"; return; }
     if(r.dce==="ok") J.ligne("✓ DCE dézippé : "+r.fichiers+" fichier"+(r.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(r.total>r.fichiers?" ("+(r.total-r.fichiers)+" en échec)":""),r.total>r.fichiers?"ko":"ok");
     else{
