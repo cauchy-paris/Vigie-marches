@@ -489,6 +489,7 @@ const PLATEFORMES = [
 /* Plateformes Atexo (PLACE, Maximilien, nombreuses plateformes régionales) :
    à partir du lien de consultation, on construit le lien direct du RC
    (téléchargeable sans compte) et celui de la page de retrait du DCE. */
+const SERVEUR_DCE="https://vigie-marches-dce.onrender.com";
 function atexoLiens(url){
   if(!url) return null;
   let u; try{ u=new URL(url); }catch(e){ return null; }
@@ -507,6 +508,7 @@ function atexoLiens(url){
     rc: base+"EntrepriseDownloadReglement&id="+encodeURIComponent(btoa(id))+"&orgAcronyme="+encodeURIComponent(org),
     dce: base+"EntrepriseDemandeTelechargementDce&id="+id+"&orgAcronyme="+encodeURIComponent(org),
     consultation: u.origin+"/entreprise/consultation/"+id+"?orgAcronyme="+encodeURIComponent(org),
+    dceAuto: SERVEUR_DCE+"/dce?origine="+encodeURIComponent(u.origin)+"&id="+id+"&org="+encodeURIComponent(org),
   };
 }
 function plateformeDe(url){
@@ -837,11 +839,11 @@ function carte(m){
   const cible=m.urlDocs||m.urlDepot||m.urlProfil;
   const direct=u=>u&&/\.(pdf|zip|docx?|rar|7z)(\?|$)/i.test(u);
   let atx=null; for(const u of [cible,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
-  const lienRC=atx?atx.rc:(cible||m.urlAvis), lienDCE=atx?atx.dce:(cible||m.urlAvis);
+  const lienRC=atx?atx.rc:(cible||m.urlAvis), lienDCE=atx?atx.dceAuto:(cible||m.urlAvis);
   const titreRC=atx?"Téléchargement direct du règlement de consultation, sans compte":cible?(direct(cible)?"Téléchargement direct":"Ouvre la consultation sur "+(plat?plat.nom:"la plateforme")+" : le RC s'y télécharge, seul ou dans le DCE. "+(plat&&plat.compte?plat.compte+".":"")):"Pas de lien de consultation dans l'annonce : ouvre l'avis BOAMP";
   const docs=el("div",{class:"docs"},
     el("a",{class:"btn btn-plein",href:lienRC,target:"_blank",rel:"noopener",title:titreRC},atx?"⬇ Télécharger le RC":"⬇ RC"),
-    el("a",{class:"btn btn-rouge",href:lienDCE,target:"_blank",rel:"noopener",title:atx?"Page de retrait du DCE : choisissez le téléchargement anonyme ou identifié":titreRC.replace("le RC s'y télécharge, seul ou dans le DCE","le DCE s'y télécharge")},"⬇ DCE"),
+    el("a",{class:"btn btn-rouge",href:lienDCE,target:"_blank",rel:"noopener",title:atx?"Téléchargement direct du DCE complet (retrait anonyme). Le premier téléchargement de la journée peut prendre jusqu'à une minute.":titreRC.replace("le RC s'y télécharge, seul ou dans le DCE","le DCE s'y télécharge")},atx?"⬇ Télécharger le DCE":"⬇ DCE"),
     atx?el("a",{class:"btn",href:atx.consultation,target:"_blank",rel:"noopener"},"Consultation"):null,
     el("a",{class:"btn",href:m.urlAvis,target:"_blank",rel:"noopener"},"Avis BOAMP"),
     el("button",{class:"btn",type:"button",title:"Marchés déjà attribués par cet acheteur (DECP)",onclick:()=>historiqueAcheteur(m)},"Historique acheteur"));
@@ -853,7 +855,7 @@ function carte(m){
   }
   c.append(el("div",{class:"pied"},docs,sts));
   const note = atx
-    ? (plat?plat.nom:"Plateforme")+" · RC en téléchargement direct ; le DCE s'obtient sur la page de retrait, sans compte si vous choisissez « anonyme »"
+    ? (plat?plat.nom:"Plateforme")+" · RC et DCE en téléchargement direct, sans compte. Le premier DCE de la journée peut mettre jusqu'à une minute à démarrer."
     : cible
     ? (plat? (plat.nom+" · "+(plat.compte||"accès selon la plateforme")) : "Lien de consultation indiqué par l'acheteur")
     : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";

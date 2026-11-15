@@ -1,0 +1,9 @@
+{
+  "name": "vigie-marches-serveur",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Récupère le DCE des plateformes Atexo (PLACE, Maximilien…) pour Vigie Marchés",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
+  "scripts": { "start": "node server.js" }
+}

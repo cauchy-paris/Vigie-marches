@@ -8,3 +8,14 @@ services:
       - path: /*
         name: X-Frame-Options
         value: DENY
+  - type: web
+    name: vigie-marches-dce
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: "true"
+    startCommand: node server.js
+    healthCheckPath: /sante
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
