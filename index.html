@@ -222,6 +222,11 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
     </div>
 
     <div class="champ">
+      <span class="lbl">Région</span>
+      <div class="multi" id="fRegions"></div>
+    </div>
+
+    <div class="champ">
       <span class="lbl">Département</span>
       <div class="multi" id="fDeps"></div>
     </div>
@@ -307,6 +312,10 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
     <div class="champ">
       <label for="dCpv">Code CPV (début du code)</label>
       <input type="text" id="dCpv" placeholder="ex. 4533 pour la plomberie" inputmode="numeric">
+    </div>
+    <div class="champ">
+      <span class="lbl">Région du lieu d'exécution</span>
+      <div class="multi" id="dRegions"></div>
     </div>
     <div class="champ">
       <span class="lbl">Département du lieu d'exécution</span>
@@ -396,6 +405,23 @@ const METIERS = [
 
 /* ---------- Départements ---------- */
 const DEPS = [["01","Ain"],["02","Aisne"],["03","Allier"],["04","Alpes-de-Haute-Provence"],["05","Hautes-Alpes"],["06","Alpes-Maritimes"],["07","Ardèche"],["08","Ardennes"],["09","Ariège"],["10","Aube"],["11","Aude"],["12","Aveyron"],["13","Bouches-du-Rhône"],["14","Calvados"],["15","Cantal"],["16","Charente"],["17","Charente-Maritime"],["18","Cher"],["19","Corrèze"],["2A","Corse-du-Sud"],["2B","Haute-Corse"],["21","Côte-d'Or"],["22","Côtes-d'Armor"],["23","Creuse"],["24","Dordogne"],["25","Doubs"],["26","Drôme"],["27","Eure"],["28","Eure-et-Loir"],["29","Finistère"],["30","Gard"],["31","Haute-Garonne"],["32","Gers"],["33","Gironde"],["34","Hérault"],["35","Ille-et-Vilaine"],["36","Indre"],["37","Indre-et-Loire"],["38","Isère"],["39","Jura"],["40","Landes"],["41","Loir-et-Cher"],["42","Loire"],["43","Haute-Loire"],["44","Loire-Atlantique"],["45","Loiret"],["46","Lot"],["47","Lot-et-Garonne"],["48","Lozère"],["49","Maine-et-Loire"],["50","Manche"],["51","Marne"],["52","Haute-Marne"],["53","Mayenne"],["54","Meurthe-et-Moselle"],["55","Meuse"],["56","Morbihan"],["57","Moselle"],["58","Nièvre"],["59","Nord"],["60","Oise"],["61","Orne"],["62","Pas-de-Calais"],["63","Puy-de-Dôme"],["64","Pyrénées-Atlantiques"],["65","Hautes-Pyrénées"],["66","Pyrénées-Orientales"],["67","Bas-Rhin"],["68","Haut-Rhin"],["69","Rhône"],["70","Haute-Saône"],["71","Saône-et-Loire"],["72","Sarthe"],["73","Savoie"],["74","Haute-Savoie"],["75","Paris"],["76","Seine-Maritime"],["77","Seine-et-Marne"],["78","Yvelines"],["79","Deux-Sèvres"],["80","Somme"],["81","Tarn"],["82","Tarn-et-Garonne"],["83","Var"],["84","Vaucluse"],["85","Vendée"],["86","Vienne"],["87","Haute-Vienne"],["88","Vosges"],["89","Yonne"],["90","Territoire de Belfort"],["91","Essonne"],["92","Hauts-de-Seine"],["93","Seine-Saint-Denis"],["94","Val-de-Marne"],["95","Val-d'Oise"],["971","Guadeloupe"],["972","Martinique"],["973","Guyane"],["974","La Réunion"],["976","Mayotte"]];
+const REGIONS=[
+  ["ARA","Auvergne-Rhône-Alpes",["01","03","07","15","26","38","42","43","63","69","73","74"]],
+  ["BFC","Bourgogne-Franche-Comté",["21","25","39","58","70","71","89","90"]],
+  ["BRE","Bretagne",["22","29","35","56"]],
+  ["CVL","Centre-Val de Loire",["18","28","36","37","41","45"]],
+  ["COR","Corse",["2A","2B"]],
+  ["GES","Grand Est",["08","10","51","52","54","55","57","67","68","88"]],
+  ["HDF","Hauts-de-France",["02","59","60","62","80"]],
+  ["IDF","Île-de-France",["75","77","78","91","92","93","94","95"]],
+  ["NOR","Normandie",["14","27","50","61","76"]],
+  ["NAQ","Nouvelle-Aquitaine",["16","17","19","23","24","33","40","47","64","79","86","87"]],
+  ["OCC","Occitanie",["09","11","12","30","31","32","34","46","48","65","66","81","82"]],
+  ["PDL","Pays de la Loire",["44","49","53","72","85"]],
+  ["PAC","Provence-Alpes-Côte d'Azur",["04","05","06","13","83","84"]],
+  ["OM","Outre-mer",["971","972","973","974","976"]],
+];
+function depsCibles(regions,deps){ const r=new Set(deps); regions.forEach(id=>{ const g=REGIONS.find(x=>x[0]===id); if(g) g[2].forEach(d=>r.add(d)); }); return [...r]; }
 const NOM_DEP = Object.fromEntries(DEPS);
 
 /* ---------- Plateformes de dématérialisation ---------- */
@@ -573,14 +599,15 @@ function normaliser(r){
 /* ====================================================================
    Construction de la requête ODSQL
    ==================================================================== */
-const etat = { type:"", metiers:[], deps:[], page:0 };
+const etat = { type:"", metiers:[], regions:[], deps:[], page:0 };
 function q(s){ return '"'+String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'; }
 function dateIso(d){ return d.toISOString().slice(0,10); }
 function construireWhere(){
   const w=[];
   const nature=$("#fNature").value; if(nature) w.push("nature="+q(nature));
   if(etat.type) w.push("type_marche="+q(etat.type));
-  if(etat.deps.length) w.push("("+etat.deps.map(d=>"code_departement="+q(d)).join(" OR ")+")");
+  const cibles=depsCibles(etat.regions,etat.deps);
+  if(cibles.length) w.push("("+cibles.map(d=>"code_departement="+q(d)).join(" OR ")+")");
   if(etat.metiers.length){
     const termes=etat.metiers.flatMap(id=>(METIERS.find(m=>m.id===id)||{termes:[]}).termes);
     w.push("("+termes.map(t=>"search(descripteur_libelle,"+q(t)+")").join(" OR ")+")");
@@ -837,11 +864,11 @@ function multiSelecteur(cont,options,choix,placeholder,surChange){
 
 /* ---------- Filtres : sauvegarde / restauration ---------- */
 function sauverFiltres(){
-  ecrire(CLE_FILTRES,{type:etat.type,metiers:etat.metiers,deps:etat.deps,mots:$("#fMots").value,complet:$("#fTexteComplet").checked,acheteur:$("#fAcheteur").value,nature:$("#fNature").value,publie:$("#fPublie").value,enCours:$("#fEnCours").checked,tri:$("#fTri").value});
+  ecrire(CLE_FILTRES,{type:etat.type,metiers:etat.metiers,regions:etat.regions,deps:etat.deps,mots:$("#fMots").value,complet:$("#fTexteComplet").checked,acheteur:$("#fAcheteur").value,nature:$("#fNature").value,publie:$("#fPublie").value,enCours:$("#fEnCours").checked,tri:$("#fTri").value});
 }
 function restaurerFiltres(){
   const f=lire(CLE_FILTRES,null); if(!f) return;
-  etat.type=f.type||""; etat.metiers.splice(0,etat.metiers.length,...(f.metiers||[])); etat.deps.splice(0,etat.deps.length,...(f.deps||[]));
+  etat.type=f.type||""; etat.metiers.splice(0,etat.metiers.length,...(f.metiers||[])); etat.deps.splice(0,etat.deps.length,...(f.deps||[])); etat.regions.splice(0,etat.regions.length,...(f.regions||[]));
   $("#fMots").value=f.mots||""; $("#fTexteComplet").checked=!!f.complet; $("#fAcheteur").value=f.acheteur||"";
   $("#fNature").value=f.nature??"APPEL_OFFRE"; $("#fPublie").value=f.publie||""; $("#fEnCours").checked=f.enCours!==false; $("#fTri").value=f.tri||"datelimitereponse asc";
 }
@@ -877,16 +904,17 @@ function changerVue(v){
 }
 
 /* ---------- Démarrage ---------- */
-let msMetiers, msDeps, minuterie;
+let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
 function init(){
   restaurerFiltres(); majSegments();
   msMetiers=multiSelecteur($("#fMetiers"),METIERS.map(m=>[m.id,m.nom]),etat.metiers,"Toutes les prestations",relancerBientot);
+  msRegions=multiSelecteur($("#fRegions"),REGIONS.map(r=>[r[0],r[1]]),etat.regions,"Toutes les régions",relancerBientot);
   msDeps=multiSelecteur($("#fDeps"),DEPS.map(([c,n])=>[c,c+" · "+n]),etat.deps,"Toute la France",relancerBientot);
   document.querySelectorAll("#fType button").forEach(b=>b.onclick=()=>{ etat.type=b.dataset.v; majSegments(); rechercher(0); });
   ["#fNature","#fPublie","#fEnCours","#fTexteComplet","#fTri"].forEach(s=>$(s).addEventListener("change",()=>rechercher(0)));
   $("#formFiltres").addEventListener("submit",e=>{ e.preventDefault(); rechercher(0); });
-  $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); rechercher(0); };
+  $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; etat.regions.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); msRegions.rafraichir(); rechercher(0); };
   document.querySelectorAll(".onglet").forEach(b=>b.onclick=()=>changerVue(b.dataset.vue));
   $("#btnExport").onclick=()=>{
     const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts},null,2)],{type:"application/json"});
@@ -906,15 +934,16 @@ function init(){
    ==================================================================== */
 const API_DECP="https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/decp-v3-marches-valides/records";
 const DECP_CHAMPS="id,objet,montant,codecpv,procedure,nature,datenotification,dureemois,acheteur_id,acheteur_nom,titulaire_id_1,titulaire_denominationsociale_1,lieuexecution_code,lieuexecution_nom,offresrecues";
-const dEtat={metiers:[],deps:[],page:0};
-let dMsMetiers,dMsDeps;
+const dEtat={metiers:[],regions:[],deps:[],page:0};
+let dMsMetiers,dMsDeps,dMsRegions;
 function decpWhere(){
   const w=[];
   const cpv=[];
   dEtat.metiers.forEach(id=>{ const m=METIERS.find(x=>x.id===id); if(m) cpv.push(...m.cpv); });
   const libre=$("#dCpv").value.replace(/\D/g,""); if(libre) cpv.push(libre);
   if(cpv.length) w.push("("+cpv.map(c=>"startswith(codecpv,"+q(c)+")").join(" OR ")+")");
-  if(dEtat.deps.length) w.push("("+dEtat.deps.map(d=>"startswith(lieuexecution_code,"+q(d)+")").join(" OR ")+")");
+  const dCibles=depsCibles(dEtat.regions,dEtat.deps);
+  if(dCibles.length) w.push("("+dCibles.map(d=>"startswith(lieuexecution_code,"+q(d)+")").join(" OR ")+")");
   const a=$("#dAcheteur").value.trim(); if(a) w.push("search(acheteur_nom,"+q(a)+")");
   const t=$("#dTitulaire").value.trim(); if(t) w.push("search(titulaire_denominationsociale_1,"+q(t)+")");
   const m=$("#dMots").value.trim(); if(m) w.push("search(objet,"+q(m)+")");
@@ -996,7 +1025,7 @@ function paginer(p,total,page,fn){
 }
 function historiqueAcheteur(m){
   $("#formDecp").reset(); $("#dPeriode").value="1095";
-  dEtat.deps.length=0; dEtat.metiers.splice(0,dEtat.metiers.length,...etat.metiers);
+  dEtat.deps.length=0; dEtat.regions.length=0; dMsRegions.rafraichir(); dEtat.metiers.splice(0,dEtat.metiers.length,...etat.metiers);
   $("#dAcheteur").value=m.acheteur;
   dMsMetiers.rafraichir(); dMsDeps.rafraichir();
   dLance=true; changerVue("attribues"); window.scrollTo({top:0});
@@ -1006,9 +1035,10 @@ function historiqueAcheteur(m){
 let dLance=false;
 function initDecp(){
   dMsMetiers=multiSelecteur($("#dMetiers"),METIERS.map(m=>[m.id,m.nom]),dEtat.metiers,"Toutes les prestations",()=>{});
+  dMsRegions=multiSelecteur($("#dRegions"),REGIONS.map(r=>[r[0],r[1]]),dEtat.regions,"Toutes les régions",()=>{});
   dMsDeps=multiSelecteur($("#dDeps"),DEPS.map(([c,n])=>[c,c+" · "+n]),dEtat.deps,"Toute la France",()=>{});
   $("#formDecp").addEventListener("submit",e=>{ e.preventDefault(); rechercherDecp(0); });
-  $("#dRaz").onclick=()=>{ $("#formDecp").reset(); dEtat.metiers.length=0; dEtat.deps.length=0; dMsMetiers.rafraichir(); dMsDeps.rafraichir(); };
+  $("#dRaz").onclick=()=>{ $("#formDecp").reset(); dEtat.metiers.length=0; dEtat.deps.length=0; dEtat.regions.length=0; dMsMetiers.rafraichir(); dMsDeps.rafraichir(); dMsRegions.rafraichir(); };
   document.querySelector('.onglet[data-vue="attribues"]').addEventListener("click",()=>{ if(!dLance){ dLance=true; rechercherDecp(0); } });
 }
 init();
