@@ -142,28 +142,49 @@ async function chercher(origine, motCle) {
   if (TRACE) TRACE.push({ recherche: motCle, statut: rep.status, nb: (html.match(/Nombre de r[ée]sultats[^0-9]{0,40}(\d+)/i) || [])[1], liens: r.slice(0, 40).map(x => x.id + " | " + x.texte.slice(-160)) });
   return r;
 }
-async function trouverConsultation(origine, ref, objet) {
-  const vus = new Map();
-  if (ref) {
+const MOTS_VIDES = new Set("les des du de la le et pour sur dans avec aux une un en au par lot lots marche marches accord cadre prestations prestation relatif relative relatifs concernant objet".split(" "));
+const REF_VIDE = /^(sans objet|neant|n\/?a|nc|non communique|aucune?|-+|\.|0+)$/i;
+const MOIS = ["jan", "fe", "mar", "av", "mai", "juin", "juil", "ao", "sep", "oct", "nov", "dec"];
+// "2027-01-15" -> motif "15 jan... 2027" tel qu'affiché dans les résultats de recherche
+function motifDate(limite) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(limite || "");
+  if (!m) return null;
+  return new RegExp("(^|\\D)0?" + Number(m[3]) + "\\s*(" + MOIS[Number(m[2]) - 1] + "[a-z.]*|/" + m[2] + "/)\\s*" + m[1]);
+}
+async function trouverConsultation(origine, ref, objet, limite) {
+  if (ref && !REF_VIDE.test(norm(ref))) {
     const r = await chercher(origine, ref);
     const nref = norm(ref);
     const exacts = r.filter(x => new RegExp("(^|[^a-z0-9])" + nref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)").test(x.texte));
     const ids = [...new Set(exacts.map(x => x.id))];
     if (ids.length === 1) return exacts.find(x => x.id === ids[0]);
-    r.forEach(x => vus.set(x.id, x));
-    const tous = [...new Set(r.map(x => x.id))];
-    if (!exacts.length && tous.length === 1) return r[0];
   }
-  if (objet) {
-    const mots = norm(objet).split(/[^a-z0-9]+/).filter(w => w.length > 3).slice(0, 8);
-    if (mots.length >= 2) {
-      const r = await chercher(origine, mots.join(" "));
-      // garder les consultations dont l'intitulé contient presque tous les mots
-      const bons = r.filter(x => mots.filter(w => x.texte.includes(w)).length >= Math.ceil(mots.length * 0.8));
-      const ids = [...new Set(bons.map(x => x.id))];
-      if (ids.length === 1) return bons.find(x => x.id === ids[0]);
+  if (!objet) return null;
+  const mots = [...new Set(norm(objet).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !MOTS_VIDES.has(w)))].slice(0, 7);
+  if (!mots.length) return null;
+  const date = motifDate(limite);
+  // recherches : tous les mots, puis en retirant un mot à la fois (l'intitulé BOAMP diffère souvent un peu)
+  const essais = [mots];
+  if (mots.length > 1) for (let k = mots.length - 1; k >= 0 && essais.length < 7; k--) essais.push(mots.filter((_, i) => i !== k));
+  const candidats = new Map();
+  for (const e of essais) {
+    let r;
+    try { r = await chercher(origine, e.join(" ")); } catch (err) { continue; }
+    for (const x of r) {
+      const ratio = mots.filter(w => x.texte.includes(w)).length / mots.length;
+      const okDate = date ? date.test(x.texte) : false;
+      const score = ratio + (okDate ? 1 : 0);
+      const prec = candidats.get(x.id);
+      if (!prec || prec.score < score) candidats.set(x.id, { ...x, score, ratio, okDate });
     }
+    const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
+    const meilleur = tri[0], second = tri[1];
+    const net = !second || meilleur.score - second.score >= 0.25;
+    if (meilleur && net && ((meilleur.okDate && meilleur.ratio >= 0.5) || (!date && meilleur.ratio >= 0.85))) return meilleur;
   }
+  const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
+  if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate) });
+  if (tri[0] && tri[0].okDate && tri[0].ratio >= 0.5 && (!tri[1] || tri[1].score < tri[0].score)) return tri[0];
   return null;
 }
 
@@ -194,7 +215,7 @@ http.createServer(async (req, res) => {
     let resultat;
     try {
       const h = new URL(o).hostname;
-      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
+      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
       if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
       const r = await telechargerDce(new URL(o).origin, id, org);
       resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
@@ -207,6 +228,7 @@ http.createServer(async (req, res) => {
       for (const x of t) {
         if (x.recherche !== undefined) l.push("RECHERCHE [" + x.recherche + "] statut=" + x.statut + " nb=" + x.nb + " ids=" + [...new Set(x.liens.map(y => y.split(" | ")[0]))].join(","));
         if (x.trouve !== undefined) l.push("TROUVE " + JSON.stringify(x.trouve));
+        if (x.candidats) l.push("CANDIDATS " + x.candidats.join(" ; "));
         if (x.statut !== undefined && x.methode) l.push(x.methode + " " + x.statut + " " + x.url.slice(0, 140));
       }
       return res.end(l.join("\n"));
@@ -220,6 +242,7 @@ http.createServer(async (req, res) => {
   let org = u.searchParams.get("org") || "";
   const ref = (u.searchParams.get("reference") || "").slice(0, 80);
   const objet = (u.searchParams.get("objet") || "").slice(0, 300);
+  const limite = (u.searchParams.get("limite") || "").slice(0, 25);
   const quoi = u.searchParams.get("quoi") || "dce"; // dce | rc | consultation
   let hote;
   try { const o = new URL(origine); if (o.protocol !== "https:" && !process.env.HOTE_TEST) throw 0; hote = o.hostname; } catch (e) { return pageErreur(res, 400, "Adresse de plateforme invalide."); }
@@ -230,12 +253,12 @@ http.createServer(async (req, res) => {
   const base = new URL(origine).origin;
   if (!id && (ref || objet)) {
     try {
-      const t = await trouverConsultation(base, ref, objet);
+      const t = await trouverConsultation(base, ref, objet, limite);
       if (t) { id = t.id; org = t.org; console.log(new Date().toISOString(), "TROUVE", hote, ref, "->", id, org); }
     } catch (e) { console.log("recherche", e.message); }
     if (!id) {
-      const rech = base + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(ref || objet);
-      return pageErreur(res, 404, "La consultation n'a pas été retrouvée automatiquement sur la plateforme" + (ref ? " (référence " + ref + ")" : "") + ".", rech, "Voir la recherche sur la plateforme");
+      const rech = base + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(ref && !REF_VIDE.test(norm(ref)) ? ref : norm(objet).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !MOTS_VIDES.has(w)).slice(0, 3).join(" "));
+      return pageErreur(res, 404, "La consultation n'a pas été retrouvée de façon certaine sur la plateforme. La recherche ci-dessous la contient sans doute : repérez-la par sa date limite, puis utilisez le bouton de retrait du DCE.", rech, "Voir la recherche sur la plateforme");
     }
   }
   if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) return pageErreur(res, 400, "Identifiant de consultation invalide.", retour);
