@@ -4,6 +4,7 @@
 "use strict";
 const http = require("http");
 const { extraire, analyser } = require("./analyse");
+const { textePdf, analyserTexte } = require("./regles");
 
 const PORT = process.env.PORT || 10000;
 const UA = "Mozilla/5.0 (compatible; VigieMarches/1.0; veille marches publics)";
@@ -258,11 +259,15 @@ async function routeAnalyse(req, res, u) {
   if (!autorise) return json(res, 403, { erreur: "Origine non autorisée" });
   let corps;
   try { corps = JSON.parse(await lireCorps(req, 400000)); } catch (e) { return json(res, 400, { erreur: "Demande illisible" }, autorise); }
-  const cle = String(corps.cle || "").slice(0, 40);
-  if (cle && analyses.has(cle)) return json(res, 200, analyses.get(cle), autorise);
-  if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { erreur: "cle", message: "L'analyse IA n'est pas encore activée : la clé ANTHROPIC_API_KEY n'est pas configurée sur le serveur." }, autorise);
+  const modeIA = u.searchParams.get("mode") === "ia";
+  const iaDispo = !!process.env.ANTHROPIC_API_KEY;
+  const cle = corps.cle ? (modeIA ? "ia:" : "rg:") + String(corps.cle).slice(0, 40) : "";
+  if (cle && analyses.has(cle)) return json(res, 200, { ...analyses.get(cle), ia: iaDispo }, autorise);
   const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
-  if (!quotaAnalyse(ip)) return json(res, 429, { erreur: "quota", message: "Nombre maximum d'analyses atteint pour aujourd'hui." }, autorise);
+  if (modeIA) {
+    if (!iaDispo) return json(res, 503, { erreur: "cle", message: "L'analyse IA n'est pas activée : la clé ANTHROPIC_API_KEY n'est pas configurée sur le serveur." }, autorise);
+    if (!quotaAnalyse(ip)) return json(res, 429, { erreur: "quota", message: "Nombre maximum d'analyses IA atteint pour aujourd'hui." }, autorise);
+  } else if (tropDeDemandes(ip)) return json(res, 429, { erreur: "quota", message: "Trop d'analyses en peu de temps. Réessayez dans quelques minutes." }, autorise);
 
   // 1. récupérer le RC quand la consultation est sur une plateforme Atexo
   let rc = null, fichier = "", lienRc = "", raisonSansRc = "";
@@ -285,10 +290,17 @@ async function routeAnalyse(req, res, u) {
     } else raisonSansRc = "pas de plateforme de téléchargement direct";
   } catch (e) { rc = null; raisonSansRc = e.message; }
 
-  // 2. synthèse
+  // 2. synthèse : mécanique (par défaut, gratuite) ou par l'IA
   try {
-    const synthese = await analyser(rc, String(corps.avis || ""));
-    const r = { ok: true, source: rc ? "rc" : "avis", fichier, lienRc, raisonSansRc, synthese, date: new Date().toISOString() };
+    let synthese, source = rc ? "rc" : "avis";
+    if (modeIA) synthese = await analyser(rc, String(corps.avis || ""));
+    else {
+      let texte = rc ? (rc.pdf ? await textePdf(rc.pdf) : rc.texte) : "";
+      if (rc && texte.replace(/\s/g, "").length < 400) { raisonSansRc = "le RC « " + fichier + " » est une image scannée, son texte n'est pas lisible"; source = "avis"; texte = ""; }
+      if (!texte) texte = String(corps.avis || "").replace(/^[^=\n]* = /gm, "");
+      synthese = analyserTexte(texte);
+    }
+    const r = { ok: true, mode: modeIA ? "ia" : "regles", source, fichier, lienRc, raisonSansRc, synthese, date: new Date().toISOString(), ia: iaDispo };
     if (cle) { analyses.set(cle, r); if (analyses.size > 800) analyses.delete(analyses.keys().next().value); }
     console.log(new Date().toISOString(), "ANALYSE OK", cle, r.source, fichier);
     return json(res, 200, r, autorise);

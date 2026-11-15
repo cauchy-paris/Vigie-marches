@@ -902,7 +902,7 @@ function carte(m){
   }
   c.append(el("div",{class:"pied"},docs,sts));
   const panneau=el("div",{class:"ia",hidden:true});
-  const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du RC par l'IA");
+  const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du règlement de consultation");
   bIA.onclick=()=>{
     const ouvrir=panneau.hidden;
     panneau.hidden=!ouvrir; bIA.setAttribute("aria-expanded",String(ouvrir));
@@ -928,7 +928,7 @@ function corpsEtat(m){
 }
 
 /* ---------- Analyse du RC par l'IA (serveur) ---------- */
-const CLE_ANALYSES="vigie.analyses.v1";
+const CLE_ANALYSES="vigie.analyses.v2";
 function avisTexte(m){
   const l=[];
   const a=(k,v)=>{ if(v&&(!Array.isArray(v)||v.length)) l.push(k+" : "+(Array.isArray(v)?v.join(" ; "):v)); };
@@ -946,28 +946,29 @@ function avisTexte(m){
   }
   return l.join("\n").slice(0,45000);
 }
-async function lancerAnalyse(m,atx,panneau,forcer){
+async function lancerAnalyse(m,atx,panneau,forcer,mode){
+  const ia=mode==="ia", cleC=(ia?"ia:":"")+m.idweb;
   const cache=lire(CLE_ANALYSES,{});
-  if(!forcer&&cache[m.idweb]){ afficherAnalyse(m,atx,panneau,cache[m.idweb]); return; }
+  if(!forcer&&cache[cleC]){ afficherAnalyse(m,atx,panneau,cache[cleC]); return; }
   panneau.dataset.charge="1";
   panneau.innerHTML="";
-  panneau.append(el("div",{class:"ia-attente"},el("span",{class:"rond"}),el("div",{},el("strong",{text:atx?"Téléchargement et lecture du règlement de consultation…":"Lecture de l'avis…"}),el("div",{text:"Cela prend en général 30 secondes à 2 minutes (un peu plus si le serveur était en veille)."}))));
+  panneau.append(el("div",{class:"ia-attente"},el("span",{class:"rond"}),el("div",{},el("strong",{text:atx?"Téléchargement et lecture du règlement de consultation…":"Lecture de l'avis…"}),el("div",{text:ia?"L'analyse par l'IA prend en général 30 secondes à 2 minutes.":"Quelques secondes, jusqu'à une minute si le serveur était en veille."}))));
   let q="";
   if(atx&&atx.dceAuto){ try{ q=new URL(atx.dceAuto).search.replace(/^\?/,""); }catch(e){} }
   try{
-    const rep=await fetch(SERVEUR_DCE+"/analyse"+(q?"?"+q:""),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cle:forcer?"":m.idweb,avis:avisTexte(m)})});
+    const rep=await fetch(SERVEUR_DCE+"/analyse?"+(ia?"mode=ia&":"")+q,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cle:forcer?"":m.idweb,avis:avisTexte(m)})});
     const r=await rep.json().catch(()=>({message:"Réponse illisible du serveur ("+rep.status+")"}));
     if(!rep.ok||!r.ok) throw Object.assign(new Error(r.message||"Erreur "+rep.status),{code:r.erreur});
-    const c2=lire(CLE_ANALYSES,{}); c2[m.idweb]=r;
+    const c2=lire(CLE_ANALYSES,{}); c2[cleC]=r;
     const cles=Object.keys(c2); if(cles.length>150) cles.slice(0,cles.length-150).forEach(k=>delete c2[k]);
     ecrire(CLE_ANALYSES,c2);
     afficherAnalyse(m,atx,panneau,r);
   }catch(e){
     delete panneau.dataset.charge;
     panneau.innerHTML="";
-    const msg=e.code==="cle"?"L'analyse IA n'est pas encore activée : il faut ajouter la clé ANTHROPIC_API_KEY sur le service vigie-marches-dce dans Render (Environment)."
+    const msg=e.code==="cle"?"L'analyse IA n'est pas activée : il faut ajouter la clé ANTHROPIC_API_KEY sur le service vigie-marches-dce dans Render (Environment)."
       :e instanceof TypeError?"Le serveur d'analyse ne répond pas. Réessayez dans une minute (il se réveille après une période d'inactivité).":e.message;
-    panneau.append(el("div",{class:"ia-erreur"},el("p",{text:msg}),el("button",{class:"btn",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false)},"Réessayer")));
+    panneau.append(el("div",{class:"ia-erreur"},el("p",{text:msg}),el("button",{class:"btn",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false,mode)},"Réessayer"),ia?el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false)},"Revenir à l'analyse sans IA"):null));
   }
 }
 function afficherAnalyse(m,atx,panneau,r){
@@ -995,10 +996,21 @@ function afficherAnalyse(m,atx,panneau,r){
   if(lots.length) panneau.append(bloc("Lots",el("ol",{class:"lots"},lots.map(l=>el("li",{},(l.numero?l.numero+" · ":"")+l.intitule,l.montant?el("span",{class:"lot-mt",text:" · "+l.montant}):null)))));
   if((s.corps_etat||[]).length) panneau.append(bloc("Corps d'état",el("div",{},s.corps_etat.map(x=>el("span",{class:"metier",text:x})))));
   if((s.points_attention||[]).length) panneau.append(bloc("Points d'attention",ul(s.points_attention,"attention")));
-  const src=r.source==="rc"?"Analyse du règlement de consultation"+(r.fichier?" « "+r.fichier+" »":""):"Analyse faite sur l'avis BOAMP seul"+(r.raisonSansRc?" (RC non récupéré : "+r.raisonSansRc+")":"")+". Vérifiez dans le RC.";
+  const ia=r.mode==="ia";
+  if(!ia){
+    const manque=[];
+    if(!(s.criteres||[]).length) manque.push("critères de notation");
+    if(!s.montant_min&&!s.montant_max&&!s.montant_estime) manque.push("montants");
+    if(!(s.qualifications||[]).length) manque.push("qualifications");
+    if(manque.length) panneau.append(el("p",{class:"ia-source",text:"Non trouvé automatiquement : "+manque.join(", ")+". Consultez le RC pour ces points."}));
+  }
+  const src=r.source==="rc"?(ia?"Analyse par l'IA du règlement de consultation":"Lecture automatique du règlement de consultation")+(r.fichier?" « "+r.fichier+" »":""):(ia?"Analyse par l'IA de l'avis BOAMP seul":"Lecture automatique de l'avis BOAMP seul")+(r.raisonSansRc?" (RC non lu : "+r.raisonSansRc+")":"");
   let quand=""; try{ quand=" · "+new Date(r.date).toLocaleDateString("fr-FR"); }catch(e){}
-  panneau.append(el("p",{class:"ia-source"},"🤖 "+src+quand+". Synthèse générée par IA, à vérifier avant de répondre.  ",
-    el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,true)},"Relancer l'analyse")));
+  panneau.append(el("p",{class:"ia-source"},(ia?"🤖 ":"⚙ ")+src+quand+". "+(ia?"Synthèse générée par IA":"Extraction par mots-clés")+", à vérifier avant de répondre.  ",
+    r.lienRc?el("a",{href:r.lienRc,target:"_blank",rel:"noopener"},"Ouvrir le RC"):null, r.lienRc?" · ":null,
+    el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,true,r.mode)},"Relancer"),
+    !ia&&r.ia?" · ":null, !ia&&r.ia?el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false,"ia")},"Approfondir avec l'IA"):null,
+    ia?" · ":null, ia?el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false)},"Voir la lecture sans IA"):null));
 }
 
 function afficherListe(cont,items,vide){
