@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vigie Marchés</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : bandeau bleu + colonne de filtres à gauche, résultats en encarts à droite */
+:root{
+  --bleu:#16337a;        /* dominante */
+  --bleu-fonce:#0d2257;
+  --bleu-clair:#e8eefb;
+  --bleu-moyen:#3a5fc4;
+  --rouge:#d22d39;
+  --rouge-clair:#fdeced;
+  --blanc:#ffffff;
+  --fond:#f3f6fc;
+  --encre:#14203d;
+  --gris:#5b6785;
+  --trait:#d5ddef;
+  --vert:#1c7c4d; --vert-clair:#e3f4ea;
+  --ambre:#a35a00; --ambre-clair:#fff1dc;
+  --f-titre:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-texte:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--fond);color:var(--encre);font:14px/1.5 var(--f-texte)}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--bleu-moyen)}
+:focus-visible{outline:3px solid var(--rouge);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* Bandeau */
+.bandeau{background:var(--bleu);color:var(--blanc);border-bottom:4px solid var(--rouge)}
+.bandeau-in{max-width:1400px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.marque{display:flex;align-items:center;gap:12px}
+.marque-logo{width:38px;height:38px;border-radius:8px;background:var(--blanc);display:grid;place-items:center}
+.marque h1{font:800 22px/1 var(--f-titre);margin:0;letter-spacing:.01em}
+.marque small{display:block;font:500 12px/1.3 var(--f-texte);opacity:.8;margin-top:3px}
+.onglets{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+.onglet{background:transparent;border:1.5px solid rgba(255,255,255,.35);color:var(--blanc);border-radius:999px;padding:7px 14px;cursor:pointer;font-weight:600;display:flex;gap:8px;align-items:center}
+.onglet[aria-selected="true"]{background:var(--blanc);color:var(--bleu);border-color:var(--blanc)}
+.onglet .pastille{background:var(--rouge);color:var(--blanc);border-radius:999px;font-size:11px;padding:1px 7px}
+
+.page{max-width:1400px;margin:0 auto;padding:20px;display:grid;grid-template-columns:320px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.page{grid-template-columns:minmax(0,1fr);padding:14px}}
+
+/* Filtres */
+.filtres{background:var(--blanc);border:1px solid var(--trait);border-radius:12px;padding:18px;position:sticky;top:12px;display:flex;flex-direction:column;gap:16px;max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:900px){.filtres{position:static;max-height:none}}
+.filtres h2{font:700 15px/1 var(--f-titre);margin:0;color:var(--bleu);text-transform:uppercase;letter-spacing:.06em}
+.champ{display:flex;flex-direction:column;gap:6px}
+.champ>label,.champ>.lbl{font-weight:600;font-size:13px;color:var(--bleu-fonce)}
+.champ .aide{font-size:12px;color:var(--gris)}
+input[type=text],input[type=search],select{width:100%;border:1.5px solid var(--trait);border-radius:8px;padding:8px 10px;background:var(--blanc)}
+input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--bleu-moyen);outline:none;box-shadow:0 0 0 3px var(--bleu-clair)}
+.segments{display:grid;grid-template-columns:repeat(4,1fr);border:1.5px solid var(--bleu);border-radius:8px;overflow:hidden}
+.segments button{border:0;background:var(--blanc);padding:7px 2px;cursor:pointer;font-size:12.5px;font-weight:600;color:var(--bleu);border-left:1px solid var(--bleu)}
+.segments button:first-child{border-left:0}
+.segments button[aria-pressed="true"]{background:var(--bleu);color:var(--blanc)}
+.coche{display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer}
+.coche input{margin-top:3px;accent-color:var(--bleu)}
+
+/* Multi-sélecteur */
+.multi{position:relative}
+.multi-btn{width:100%;text-align:left;border:1.5px solid var(--trait);border-radius:8px;padding:8px 30px 8px 10px;background:var(--blanc);cursor:pointer;position:relative}
+.multi-btn::after{content:"";position:absolute;right:12px;top:50%;width:7px;height:7px;border-right:2px solid var(--bleu);border-bottom:2px solid var(--bleu);transform:translateY(-70%) rotate(45deg)}
+.multi-pop{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);background:var(--blanc);border:1.5px solid var(--bleu-moyen);border-radius:8px;box-shadow:0 10px 30px rgba(13,34,87,.18);padding:8px}
+.multi-pop input{margin-bottom:6px}
+.multi-liste{max-height:260px;overflow:auto;display:flex;flex-direction:column}
+.multi-liste label{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:13px}
+.multi-liste label:hover{background:var(--bleu-clair)}
+.multi-liste input{accent-color:var(--bleu)}
+.puces{display:flex;flex-wrap:wrap;gap:5px}
+.puce{display:inline-flex;align-items:center;gap:4px;background:var(--bleu-clair);color:var(--bleu-fonce);border-radius:999px;padding:2px 4px 2px 9px;font-size:12px;font-weight:500}
+.puce button{border:0;background:transparent;cursor:pointer;color:var(--bleu);font-weight:700;padding:0 4px;line-height:1}
+
+.actions-filtres{display:flex;gap:8px}
+.btn{border:1.5px solid var(--bleu);background:var(--blanc);color:var(--bleu);border-radius:8px;padding:8px 12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;font-size:13px;white-space:nowrap}
+.btn:hover{background:var(--bleu-clair)}
+.btn-plein{background:var(--bleu);color:var(--blanc)}
+.btn-plein:hover{background:var(--bleu-fonce)}
+.btn-rouge{border-color:var(--rouge);color:var(--rouge)}
+.btn-rouge:hover{background:var(--rouge-clair)}
+.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
+.grand{flex:1}
+
+/* Zone résultats */
+.resultats{display:flex;flex-direction:column;gap:14px;min-width:0}
+.compteur{background:var(--bleu);color:var(--blanc);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.compteur .nb{font:800 34px/1 var(--f-titre);font-variant-numeric:tabular-nums}
+.compteur .txt{font-weight:600;line-height:1.3}
+.compteur .txt small{display:block;font-weight:400;opacity:.85}
+.compteur .tri{margin-left:auto;display:flex;gap:8px;align-items:center}
+.compteur select{width:auto;border-color:rgba(255,255,255,.4);background:var(--bleu-fonce);color:var(--blanc)}
+.etat{background:var(--blanc);border:1px dashed var(--trait);border-radius:12px;padding:28px;text-align:center;color:var(--gris)}
+.etat.erreur{border:1.5px solid var(--rouge);background:var(--rouge-clair);color:var(--encre);text-align:left}
+.etat.erreur code{font-family:var(--f-mono);font-size:12px;word-break:break-all}
+
+/* Encart marché */
+.carte{background:var(--blanc);border:1px solid var(--trait);border-radius:12px;padding:16px 18px;display:grid;gap:12px;position:relative}
+.carte.statut-lecture{box-shadow:inset 4px 0 0 var(--bleu-moyen)}
+.carte.statut-reflexion{box-shadow:inset 4px 0 0 var(--ambre)}
+.carte.statut-reponse{box-shadow:inset 4px 0 0 var(--rouge)}
+.carte-tete{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.carte-tete .gauche{min-width:0;flex:1 1 380px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.badge{font:600 11px/1 var(--f-texte);text-transform:uppercase;letter-spacing:.06em;padding:5px 8px;border-radius:5px;background:var(--bleu-clair);color:var(--bleu)}
+.badge.travaux{background:var(--bleu);color:var(--blanc)}
+.badge.services{background:var(--bleu-moyen);color:var(--blanc)}
+.badge.fournitures{background:var(--blanc);color:var(--bleu);box-shadow:inset 0 0 0 1.5px var(--bleu)}
+.badge.nouveau{background:var(--rouge);color:var(--blanc)}
+.badge.plateforme{background:var(--fond);color:var(--encre);box-shadow:inset 0 0 0 1px var(--trait);text-transform:none;letter-spacing:0}
+.carte h3{font:700 17px/1.3 var(--f-titre);margin:0;color:var(--bleu-fonce);text-wrap:balance}
+.acheteur{color:var(--gris);font-weight:500;margin-top:4px}
+.echeance{text-align:right;min-width:150px}
+.echeance .j{font:800 24px/1 var(--f-titre);color:var(--bleu);font-variant-numeric:tabular-nums}
+.echeance.urgent .j{color:var(--rouge)}
+.echeance.passe .j{color:var(--gris)}
+.echeance .d{font-size:12px;color:var(--gris)}
+.infos{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 16px;margin:0;padding:10px 0;border-top:1px solid var(--trait);border-bottom:1px solid var(--trait)}
+.infos div{min-width:0}
+.infos dt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--gris);font-weight:600}
+.infos dd{margin:2px 0 0;font-weight:500;overflow-wrap:anywhere}
+.resume{color:var(--encre);margin:0;white-space:pre-line}
+.resume.coupe{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.lien-plus{justify-self:start;border:0;background:none;color:var(--bleu-moyen);cursor:pointer;padding:0;font-weight:600;font-size:13px}
+.lots{margin:0;padding-left:18px;font-size:13px}
+.cpv{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px}
+.cpv code{font-family:var(--f-mono);background:var(--fond);border:1px solid var(--trait);border-radius:4px;padding:1px 6px}
+.cpv .metier{background:var(--vert-clair);color:var(--vert);border-radius:4px;padding:1px 7px;font-weight:600}
+.pied{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.docs{display:flex;gap:8px;flex-wrap:wrap}
+.statuts{display:flex;gap:6px;flex-wrap:wrap}
+.statut{border:1.5px solid var(--trait);background:var(--blanc);border-radius:999px;padding:6px 12px;font-weight:600;font-size:12.5px;cursor:pointer;color:var(--gris)}
+.statut:hover{border-color:var(--bleu-moyen);color:var(--bleu)}
+.statut[aria-pressed="true"][data-s="lecture"]{background:var(--bleu-clair);border-color:var(--bleu-moyen);color:var(--bleu)}
+.statut[aria-pressed="true"][data-s="reflexion"]{background:var(--ambre-clair);border-color:var(--ambre);color:var(--ambre)}
+.statut[aria-pressed="true"][data-s="reponse"]{background:var(--rouge);border-color:var(--rouge);color:var(--blanc)}
+.note-docs{font-size:12px;color:var(--gris);margin:0}
+.ref{font-family:var(--f-mono);font-size:12px;color:var(--gris)}
+
+.pagination{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
+.pagination span{color:var(--gris);font-variant-numeric:tabular-nums}
+
+/* Suivi */
+.suivi-filtres{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.encadre{background:var(--blanc);border:1px solid var(--trait);border-radius:12px;padding:16px 18px}
+.encadre h2{font:700 16px/1.2 var(--f-titre);color:var(--bleu);margin:0 0 8px}
+.sources{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.source{border:1px solid var(--trait);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--blanc)}
+.source h3{margin:0;font:700 15px/1.2 var(--f-titre);color:var(--bleu-fonce)}
+.source p{margin:0;font-size:13px;color:var(--gris)}
+.tag{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:2px 7px;text-transform:uppercase;letter-spacing:.05em}
+.tag.ok{background:var(--vert-clair);color:var(--vert)}
+.tag.partiel{background:var(--ambre-clair);color:var(--ambre)}
+.tag.non{background:var(--rouge-clair);color:var(--rouge)}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-weight:500;z-index:50}
+@media (prefers-reduced-motion:no-preference){.carte{animation:entre .25s ease-out both}@keyframes entre{from{transform:translateY(4px);opacity:.6}to{transform:none;opacity:1}}}
+</style>
+</head>
+<body>
+<header class="bandeau">
+  <div class="bandeau-in">
+    <div class="marque">
+      <div class="marque-logo" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="#16337a" stroke-width="2.6"/><path d="M15.5 15.5 21 21" stroke="#d22d39" stroke-width="3" stroke-linecap="round"/></svg>
+      </div>
+      <div><h1>Vigie Marchés</h1><small>Veille des appels d'offres publics · données BOAMP en direct</small></div>
+    </div>
+    <nav class="onglets" role="tablist">
+      <button class="onglet" role="tab" aria-selected="true" data-vue="recherche">Recherche</button>
+      <button class="onglet" role="tab" aria-selected="false" data-vue="suivi">Mes marchés <span class="pastille" id="nbSuivis">0</span></button>
+      <button class="onglet" role="tab" aria-selected="false" data-vue="sources">Sources &amp; plateformes</button>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ VUE RECHERCHE ============ -->
+<main class="page" id="vue-recherche">
+  <form class="filtres" id="formFiltres" autocomplete="off">
+    <h2>Filtres</h2>
+
+    <div class="champ">
+      <label for="fMots">Mots-clés</label>
+      <input type="search" id="fMots" placeholder="ex. réhabilitation école">
+      <label class="coche"><input type="checkbox" id="fTexteComplet"> Chercher aussi dans le texte complet de l'annonce</label>
+    </div>
+
+    <div class="champ">
+      <span class="lbl">Type de marché</span>
+      <div class="segments" id="fType">
+        <button type="button" data-v="" aria-pressed="true">Tous</button>
+        <button type="button" data-v="TRAVAUX" aria-pressed="false">Travaux</button>
+        <button type="button" data-v="SERVICES" aria-pressed="false">Services</button>
+        <button type="button" data-v="FOURNITURES" aria-pressed="false">Fournit.</button>
+      </div>
+    </div>
+
+    <div class="champ">
+      <span class="lbl">Type de prestation</span>
+      <div class="multi" id="fMetiers"></div>
+      <span class="aide">Basé sur les descripteurs officiels du BOAMP (nomenclature des prestations), plus fiable que les mots-clés.</span>
+    </div>
+
+    <div class="champ">
+      <span class="lbl">Département</span>
+      <div class="multi" id="fDeps"></div>
+    </div>
+
+    <div class="champ">
+      <label for="fAcheteur">Acheteur public</label>
+      <input type="search" id="fAcheteur" placeholder="ex. Ville de Paris, OPH, Région…">
+    </div>
+
+    <div class="champ">
+      <label for="fNature">Type d'avis</label>
+      <select id="fNature">
+        <option value="APPEL_OFFRE">Avis de marché (appels d'offres)</option>
+        <option value="RECTIFICATIF">Rectificatifs</option>
+        <option value="PRE-INFORMATION">Pré-information</option>
+        <option value="ATTRIBUTION">Résultats / attributions</option>
+        <option value="">Tous les avis</option>
+      </select>
+    </div>
+
+    <div class="champ">
+      <label for="fPublie">Publié</label>
+      <select id="fPublie">
+        <option value="">Depuis toujours</option>
+        <option value="1">Depuis 24 h</option>
+        <option value="3">Depuis 3 jours</option>
+        <option value="7">Depuis 7 jours</option>
+        <option value="30">Depuis 30 jours</option>
+      </select>
+      <label class="coche"><input type="checkbox" id="fEnCours" checked> Uniquement les marchés encore ouverts (date limite non dépassée)</label>
+    </div>
+
+    <div class="actions-filtres">
+      <button type="submit" class="btn btn-plein grand">Rechercher</button>
+      <button type="button" class="btn" id="btnRaz">Effacer</button>
+    </div>
+  </form>
+
+  <section class="resultats" aria-live="polite">
+    <div class="compteur">
+      <div class="nb" id="nbRes">–</div>
+      <div class="txt" id="txtRes">marchés trouvés<small>Lancement de la recherche…</small></div>
+      <div class="tri">
+        <label for="fTri" style="font-size:13px">Trier</label>
+        <select id="fTri">
+          <option value="datelimitereponse asc">Date limite la plus proche</option>
+          <option value="dateparution desc">Publication la plus récente</option>
+        </select>
+      </div>
+    </div>
+    <div id="liste" style="display:grid;gap:14px"></div>
+    <div class="pagination" id="pagination"></div>
+  </section>
+</main>
+
+<!-- ============ VUE SUIVI ============ -->
+<main class="page" id="vue-suivi" hidden style="grid-template-columns:minmax(0,1fr)">
+  <section class="resultats">
+    <div class="encadre">
+      <h2>Mes marchés suivis</h2>
+      <div class="suivi-filtres" id="suiviFiltres"></div>
+      <p class="note-docs" style="margin-top:10px">Les statuts sont enregistrés dans ce navigateur, sur cet ordinateur. Pensez à faire une sauvegarde de temps en temps, ou pour les transférer sur un autre poste.</p>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn" id="btnExport" type="button">Sauvegarder mes statuts (fichier)</button>
+        <label class="btn" for="fichierImport">Restaurer une sauvegarde</label>
+        <input type="file" id="fichierImport" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div id="listeSuivi" style="display:grid;gap:14px"></div>
+  </section>
+</main>
+
+<!-- ============ VUE SOURCES ============ -->
+<main class="page" id="vue-sources" hidden style="grid-template-columns:minmax(0,1fr)">
+  <section class="resultats">
+    <div class="encadre">
+      <h2>Ce que l'outil couvre aujourd'hui</h2>
+      <p style="margin:0 0 6px">La recherche interroge en direct l'API open data du <strong>BOAMP</strong> (DILA). Tout marché public français dont le montant estimé atteint 90 000 € HT doit être publié au BOAMP ou dans un journal d'annonces légales, et la plupart des acheteurs passent par le BOAMP. Chaque annonce BOAMP indique la plateforme où se trouve le dossier de consultation : c'est ce lien que suivent les boutons <strong>RC</strong> et <strong>DCE</strong>, et le badge gris de chaque encart indique de quelle plateforme il s'agit (PLACE, Maximilien, AWS-Achat, achatpublic…).</p>
+      <p style="margin:0">Les petits marchés en procédure adaptée (sous 90 000 € HT) peuvent n'être publiés que sur le profil acheteur. Pour ceux-là, il faut aussi consulter les plateformes ci-dessous.</p>
+    </div>
+    <div class="sources" id="sources"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+"use strict";
+/* ====================================================================
+   Vigie Marchés : veille BOAMP (API Opendatasoft de la DILA)
+   ==================================================================== */
+const API = "https://boamp-datadila.opendatasoft.com/api/explore/v2.1/catalog/datasets/boamp/records";
+const PAR_PAGE = 20;
+const CHAMPS = "idweb,objet,nomacheteur,dateparution,datelimitereponse,type_marche,code_departement,descripteur_libelle,procedure_libelle,famille_libelle,nature_libelle,url_avis,donnees";
+
+/* ---------- Métiers : descripteurs BOAMP + préfixes CPV ---------- */
+const METIERS = [
+  {id:"plomberie",  nom:"Plomberie, sanitaire",            termes:["plomberie","sanitaire"],                         cpv:["45330","45332","44115","44411"]},
+  {id:"cvc",        nom:"Chauffage, ventilation, clim (CVC)", termes:["chauffage","ventilation","climatisation"],   cpv:["45331","39715","42500","50720","50730"]},
+  {id:"electricite",nom:"Électricité, courants faibles",   termes:["électricité","courants faibles","éclairage"],    cpv:["4531","31","50711","34993"]},
+  {id:"grosoeuvre", nom:"Gros œuvre, maçonnerie",          termes:["maçonnerie","gros œuvre","béton"],               cpv:["45262","45223","4521"]},
+  {id:"menuiserie", nom:"Menuiserie",                      termes:["menuiserie"],                                    cpv:["45421","44221"]},
+  {id:"peinture",   nom:"Peinture, revêtements",           termes:["peinture","revêtements"],                         cpv:["45442","45432","45431"]},
+  {id:"platrerie",  nom:"Plâtrerie, cloisons, plafonds",   termes:["plâtrerie","cloisons","plafonds"],               cpv:["45410","454211"]},
+  {id:"couverture", nom:"Couverture, charpente, étanchéité",termes:["couverture","charpente","étanchéité"],         cpv:["45261"]},
+  {id:"serrurerie", nom:"Serrurerie, métallerie",          termes:["serrurerie","métallerie"],                       cpv:["45421","44316","44212"]},
+  {id:"vrd",        nom:"VRD, voirie, terrassement",       termes:["voirie","terrassement","assainissement","réseaux divers"], cpv:["45233","45232","45112","45111"]},
+  {id:"espacesverts",nom:"Espaces verts, paysage",         termes:["espaces verts","paysager"],                      cpv:["77310","77311","77314","45112710"]},
+  {id:"demolition", nom:"Démolition, désamiantage",        termes:["démolition","désamiantage","amiante"],           cpv:["45111","45262660"]},
+  {id:"nettoyage",  nom:"Nettoyage, propreté",             termes:["nettoyage"],                                     cpv:["9091","9092"]},
+  {id:"maintenance",nom:"Maintenance multitechnique",      termes:["maintenance"],                                   cpv:["507","5070","5071"]},
+  {id:"ascenseurs", nom:"Ascenseurs",                      termes:["ascenseur"],                                     cpv:["42416","50750"]},
+  {id:"incendie",   nom:"Sécurité incendie, sûreté",       termes:["incendie","sécurité"],                           cpv:["31625","35111","45343","79710"]},
+  {id:"informatique",nom:"Informatique, logiciels",        termes:["informatique","logiciel"],                       cpv:["48","72","302"]},
+  {id:"moe",        nom:"Maîtrise d'œuvre, études",        termes:["maîtrise d'œuvre","études","architecture"],      cpv:["71"]},
+];
+
+/* ---------- Départements ---------- */
+const DEPS = [["01","Ain"],["02","Aisne"],["03","Allier"],["04","Alpes-de-Haute-Provence"],["05","Hautes-Alpes"],["06","Alpes-Maritimes"],["07","Ardèche"],["08","Ardennes"],["09","Ariège"],["10","Aube"],["11","Aude"],["12","Aveyron"],["13","Bouches-du-Rhône"],["14","Calvados"],["15","Cantal"],["16","Charente"],["17","Charente-Maritime"],["18","Cher"],["19","Corrèze"],["2A","Corse-du-Sud"],["2B","Haute-Corse"],["21","Côte-d'Or"],["22","Côtes-d'Armor"],["23","Creuse"],["24","Dordogne"],["25","Doubs"],["26","Drôme"],["27","Eure"],["28","Eure-et-Loir"],["29","Finistère"],["30","Gard"],["31","Haute-Garonne"],["32","Gers"],["33","Gironde"],["34","Hérault"],["35","Ille-et-Vilaine"],["36","Indre"],["37","Indre-et-Loire"],["38","Isère"],["39","Jura"],["40","Landes"],["41","Loir-et-Cher"],["42","Loire"],["43","Haute-Loire"],["44","Loire-Atlantique"],["45","Loiret"],["46","Lot"],["47","Lot-et-Garonne"],["48","Lozère"],["49","Maine-et-Loire"],["50","Manche"],["51","Marne"],["52","Haute-Marne"],["53","Mayenne"],["54","Meurthe-et-Moselle"],["55","Meuse"],["56","Morbihan"],["57","Moselle"],["58","Nièvre"],["59","Nord"],["60","Oise"],["61","Orne"],["62","Pas-de-Calais"],["63","Puy-de-Dôme"],["64","Pyrénées-Atlantiques"],["65","Hautes-Pyrénées"],["66","Pyrénées-Orientales"],["67","Bas-Rhin"],["68","Haut-Rhin"],["69","Rhône"],["70","Haute-Saône"],["71","Saône-et-Loire"],["72","Sarthe"],["73","Savoie"],["74","Haute-Savoie"],["75","Paris"],["76","Seine-Maritime"],["77","Seine-et-Marne"],["78","Yvelines"],["79","Deux-Sèvres"],["80","Somme"],["81","Tarn"],["82","Tarn-et-Garonne"],["83","Var"],["84","Vaucluse"],["85","Vendée"],["86","Vienne"],["87","Haute-Vienne"],["88","Vosges"],["89","Yonne"],["90","Territoire de Belfort"],["91","Essonne"],["92","Hauts-de-Seine"],["93","Seine-Saint-Denis"],["94","Val-de-Marne"],["95","Val-d'Oise"],["971","Guadeloupe"],["972","Martinique"],["973","Guyane"],["974","La Réunion"],["976","Mayotte"]];
+const NOM_DEP = Object.fromEntries(DEPS);
+
+/* ---------- Plateformes de dématérialisation ---------- */
+const PLATEFORMES = [
+  {re:/marches-publics\.gouv\.fr/i, nom:"PLACE", compte:"DCE téléchargeable sans compte (identification facultative)"},
+  {re:/maximilien\.fr/i, nom:"Maximilien", compte:"DCE téléchargeable sans compte (identification facultative)"},
+  {re:/marches-publics\.info|aws-achat|aws-france/i, nom:"AWS-Achat", compte:"Compte gratuit souvent demandé pour le DCE"},
+  {re:/achatpublic\.com/i, nom:"achatpublic", compte:"Compte gratuit demandé pour le DCE"},
+  {re:/e-marchespublics\.com/i, nom:"e-marchespublics", compte:"Compte gratuit demandé pour le DCE"},
+  {re:/marches-securises\.fr/i, nom:"Marchés sécurisés", compte:"Compte gratuit demandé pour le DCE"},
+  {re:/megalis/i, nom:"Mégalis Bretagne", compte:"DCE souvent sans compte"},
+  {re:/klekoon/i, nom:"Klekoon", compte:"Compte gratuit demandé pour le DCE"},
+  {re:/local-trust/i, nom:"Local Trust", compte:"Compte gratuit demandé pour le DCE"},
+  {re:/synapse-entreprises/i, nom:"Synapse", compte:""},
+  {re:/ternum-bfc/i, nom:"Ternum BFC", compte:""},
+  {re:/alsacemarchespublics/i, nom:"Alsace Marchés Publics", compte:""},
+  {re:/marchespublics\.grandest|grandest\.fr/i, nom:"Grand Est", compte:""},
+  {re:/projets-achats\.marches-publics/i, nom:"PLACE", compte:""},
+  {re:/demat-ampa|ampmetropole/i, nom:"AMP Métropole", compte:""},
+  {re:/atexo/i, nom:"Plateforme Atexo", compte:"DCE généralement sans compte"},
+  {re:/boamp\.fr/i, nom:"BOAMP", compte:""},
+];
+function plateformeDe(url){
+  if(!url) return null;
+  for(const p of PLATEFORMES) if(p.re.test(url)) return p;
+  try{ return {nom:new URL(url).hostname.replace(/^www\./,""), compte:""}; }catch(e){ return null; }
+}
+
+/* ---------- Stockage local ---------- */
+const CLE_STATUTS="vigie.statuts.v1", CLE_FILTRES="vigie.filtres.v1", CLE_VISITE="vigie.visite.v1";
+function lire(cle,defaut){ try{ const v=localStorage.getItem(cle); return v?JSON.parse(v):defaut; }catch(e){ return defaut; } }
+function ecrire(cle,val){ try{ localStorage.setItem(cle,JSON.stringify(val)); return true; }catch(e){ return false; } }
+let statuts = lire(CLE_STATUTS,{});
+const visitePrecedente = lire(CLE_VISITE,null);
+ecrire(CLE_VISITE,new Date().toISOString());
+
+const LIB_STATUT = {lecture:"Lecture", reflexion:"En réflexion", reponse:"J'y réponds"};
+
+/* ====================================================================
+   Lecture du champ « donnees » (eForms, FNSimple, MAPA…)
+   ==================================================================== */
+function txt(v){
+  if(v==null) return "";
+  if(typeof v==="string"||typeof v==="number") return String(v).trim();
+  if(Array.isArray(v)){
+    const fr=v.find(x=>x&&typeof x==="object"&&/^FR/i.test(x["@languageID"]||""));
+    return txt(fr||v[0]);
+  }
+  if(typeof v==="object"){
+    if("#text" in v) return txt(v["#text"]);
+    if("$" in v) return txt(v["$"]);
+  }
+  return "";
+}
+/* Parcourt l'arbre : appelle f(clé, valeur, chemin) */
+function parcourir(o,f,chemin=""){
+  if(o==null||typeof o!=="object") return;
+  if(Array.isArray(o)){ o.forEach((x,i)=>parcourir(x,f,chemin)); return; }
+  for(const k of Object.keys(o)){
+    const v=o[k], p=chemin?chemin+"/"+k:k;
+    f(k,v,p);
+    if(v&&typeof v==="object") parcourir(v,f,p);
+  }
+}
+function premier(o,cle){ let r; parcourir(o,(k,v)=>{ if(r===undefined&&k===cle) r=v; }); return r; }
+function tous(o,cle){ const r=[]; parcourir(o,(k,v)=>{ if(k===cle) r.push(v); }); return r; }
+function premierRe(o,re,filtre){ let r; parcourir(o,(k,v,p)=>{ if(r===undefined&&re.test(k)){ const t=txt(v); if(t&&(!filtre||filtre(t))) r=t; } }); return r; }
+
+const URL_RE=/https?:\/\/[^\s"'<>\\)]+/gi;
+const URL_IGNOREES=/telerecours|juradm|europa\.eu|legifrance|service-public|conseil-etat|economie\.gouv\.fr\/daj|w3\.org|schemas|xmlns|boamp\.journal-officiel/i;
+
+function analyserDonnees(brut){
+  const res={description:"",lieu:"",duree:"",montant:"",lots:[],cpv:[],urlDocs:null,urlDepot:null,urlProfil:null,refAcheteur:""};
+  if(!brut) return res;
+  let d; try{ d=typeof brut==="string"?JSON.parse(brut):brut; }catch(e){ return res; }
+
+  // --- liens : classement d'après la clé où l'URL apparaît
+  const docs=[],depot=[],profil=[],autres=[];
+  parcourir(d,(k,v,p)=>{
+    const t=typeof v==="string"?v:(v&&typeof v==="object"&&!Array.isArray(v)&&typeof v["#text"]==="string"?v["#text"]:null);
+    if(!t) return;
+    const urls=t.match(URL_RE); if(!urls) return;
+    for(let u of urls){
+      u=u.replace(/[.,;]+$/,"");
+      if(URL_IGNOREES.test(u)) continue;
+      if(/CallForTendersDocumentReference|DocConsul|URL_DOCUMENT|document|dce/i.test(p)) docs.push(u);
+      else if(/EndpointID|TenderRecipient|PARTICIPATION|depot|Depot|soumission|remise/i.test(p)) depot.push(u);
+      else if(/BuyerProfile|PROFIL|profil/i.test(p)) profil.push(u);
+      else if(!/WebsiteURI|URL_ACHETEUR|urlAcheteur|MEL|mail/i.test(p)) autres.push(u);
+    }
+  });
+  const plateformeConnue=u=>{ const p=plateformeDe(u); return p&&PLATEFORMES.includes(p); };
+  res.urlDocs = docs[0] || depot.find(plateformeConnue) || autres.find(plateformeConnue) || null;
+  res.urlDepot = depot[0]||null;
+  res.urlProfil = profil[0]||null;
+
+  // --- CPV
+  const cpv=[];
+  parcourir(d,(k,v,p)=>{
+    if(k==="cbc:ItemClassificationCode"||/cpv/i.test(p)){
+      const t=txt(v); const m=t.match(/^(\d{8})(-\d)?$/);
+      if(m&&!cpv.includes(m[1])) cpv.push(m[1]);
+    }
+  });
+  res.cpv=cpv;
+
+  // --- description / résumé
+  const projet = premier(d,"cac:ProcurementProject");
+  res.description = (projet&&txt(premier(projet,"cbc:Description")))
+    || premierRe(d,/^(RESUME_OBJET|OBJET_COMPLET|objetComplet|descriptionMarche|DESCRIPTION_SUCCINCTE|description)$/i, t=>t.length>20) || "";
+
+  // --- montant estimé
+  const montantE = premier(d,"cbc:EstimatedOverallContractAmount");
+  if(montantE!==undefined){ res.montant=formaterMontant(txt(montantE), montantE&&montantE["@currencyID"]); }
+  else{
+    const m=premierRe(d,/^(VALEUR_ESTIMEE|valeurEstimee|VALEUR|MONTANT|montant|valeurTotale)$/i,t=>/^\d[\d\s.,]*$/.test(t));
+    if(m) res.montant=formaterMontant(m,"EUR");
+  }
+
+  // --- durée
+  const dur = premier(d,"cbc:DurationMeasure");
+  if(dur!==undefined){ res.duree=formaterDuree(txt(dur), dur&&dur["@unitCode"]); }
+  else{
+    const mo=premierRe(d,/^(DUREE_MOIS|dureeMois|NB_MOIS)$/i,t=>/^\d+$/.test(t)); if(mo) res.duree=mo+" mois";
+    else{ const j=premierRe(d,/^(DUREE_JOURS|dureeJours|NB_JOURS)$/i,t=>/^\d+$/.test(t)); if(j) res.duree=j+" jours"; }
+  }
+
+  // --- lieu d'exécution
+  const lieuNoeud = premier(d,"cac:RealizedLocation");
+  if(lieuNoeud){
+    const ville=txt(premier(lieuNoeud,"cbc:CityName")), cp=txt(premier(lieuNoeud,"cbc:PostalZone")), desc=txt(premier(lieuNoeud,"cbc:Description"));
+    res.lieu=[cp,ville].filter(Boolean).join(" ")||desc;
+  }
+  if(!res.lieu) res.lieu = premierRe(d,/^(LIEU_EXECUTION|lieuExecution|LIEU_PRINCIPAL|lieuPrincipal|LIEU_EXEC_LIVR|lieuExecutionLivraison)$/i)||"";
+
+  // --- lots
+  const lotsE = tous(d,"cac:ProcurementProjectLot").flatMap(x=>Array.isArray(x)?x:[x]);
+  if(lotsE.length>1){
+    res.lots = lotsE.map(l=>{ const pp=premier(l,"cac:ProcurementProject"); return txt(pp&&premier(pp,"cbc:Name"))||txt(premier(l,"cbc:ID")); }).filter(Boolean);
+  }else{
+    const lotsL = tous(d,"LOT").concat(tous(d,"lot")).flatMap(x=>Array.isArray(x)?x:[x]).filter(x=>x&&typeof x==="object");
+    if(lotsL.length>1) res.lots = lotsL.map(l=>premierRe(l,/^(INTITULE|intitule|DESCRIPTION|description|objet)$/i)||"").filter(Boolean);
+  }
+
+  // --- référence acheteur
+  res.refAcheteur = (projet&&txt(premier(projet,"cbc:ID"))) || premierRe(d,/^(REF_MARCHE|numeroReference|REFERENCE_MARCHE)$/)||"";
+  return res;
+}
+function formaterMontant(v,devise){
+  const n=parseFloat(String(v).replace(/\s/g,"").replace(",","."));
+  if(!isFinite(n)||n<=0) return "";
+  return n.toLocaleString("fr-FR",{maximumFractionDigits:0})+" "+(devise&&devise!=="EUR"?devise:"€")+" HT";
+}
+function formaterDuree(v,u){
+  if(!v) return "";
+  const unites={MONTH:"mois",DAY:"jours",YEAR:"ans",WEEK:"semaines"};
+  let n=v; if(u==="YEAR"&&v==="1") return "1 an";
+  return n+" "+(unites[u]||u||"");
+}
+
+/* ---------- Normalisation d'un enregistrement ---------- */
+function liste(v){ return v==null?[]:Array.isArray(v)?v:[v]; }
+function normaliser(r){
+  const a=analyserDonnees(r.donnees);
+  return {
+    idweb:r.idweb, objet:r.objet||"(sans objet)", acheteur:r.nomacheteur||"",
+    parution:r.dateparution||null, limite:r.datelimitereponse||null,
+    types:liste(r.type_marche), deps:liste(r.code_departement), descripteurs:liste(r.descripteur_libelle),
+    procedure:r.procedure_libelle||"", famille:r.famille_libelle||"", nature:r.nature_libelle||"",
+    urlAvis:r.url_avis||("https://www.boamp.fr/pages/avis/?q=idweb:"+r.idweb),
+    ...a
+  };
+}
+
+/* ====================================================================
+   Construction de la requête ODSQL
+   ==================================================================== */
+const etat = { type:"", metiers:[], deps:[], page:0 };
+function q(s){ return '"'+String(s).replace(/\\/g,"\\\\").replace(/"/g,'\\"')+'"'; }
+function dateIso(d){ return d.toISOString().slice(0,10); }
+function construireWhere(){
+  const w=[];
+  const nature=$("#fNature").value; if(nature) w.push("nature="+q(nature));
+  if(etat.type) w.push("type_marche="+q(etat.type));
+  if(etat.deps.length) w.push("("+etat.deps.map(d=>"code_departement="+q(d)).join(" OR ")+")");
+  if(etat.metiers.length){
+    const termes=etat.metiers.flatMap(id=>(METIERS.find(m=>m.id===id)||{termes:[]}).termes);
+    w.push("("+termes.map(t=>"search(descripteur_libelle,"+q(t)+")").join(" OR ")+")");
+  }
+  const ach=$("#fAcheteur").value.trim(); if(ach) w.push("search(nomacheteur,"+q(ach)+")");
+  const mots=$("#fMots").value.trim();
+  if(mots){
+    if($("#fTexteComplet").checked) w.push("search("+q(mots)+")");
+    else w.push("(search(objet,"+q(mots)+") OR search(descripteur_libelle,"+q(mots)+"))");
+  }
+  if($("#fEnCours").checked) w.push("datelimitereponse>=date'"+dateIso(new Date())+"'");
+  const pub=$("#fPublie").value;
+  if(pub){ const d=new Date(); d.setDate(d.getDate()-Number(pub)); w.push("dateparution>=date'"+dateIso(d)+"'"); }
+  return w.join(" AND ");
+}
+
+let requeteEnCours=0;
+async function rechercher(page=0){
+  etat.page=page;
+  sauverFiltres();
+  const id=++requeteEnCours;
+  const where=construireWhere();
+  const tri=$("#fTri").value;
+  const params=new URLSearchParams({select:CHAMPS,limit:String(PAR_PAGE),offset:String(page*PAR_PAGE),order_by:tri});
+  if(where) params.set("where",where);
+  const url=API+"?"+params.toString();
+  $("#txtRes").innerHTML='marchés trouvés<small>Recherche en cours…</small>';
+  $("#liste").innerHTML='<div class="etat">Chargement des annonces BOAMP…</div>';
+  $("#pagination").innerHTML="";
+  try{
+    const rep=await fetch(url,{headers:{Accept:"application/json"}});
+    const corps=await rep.json().catch(()=>null);
+    if(id!==requeteEnCours) return;
+    if(!rep.ok){ throw new Error((corps&&(corps.message||corps.error_code))||("Erreur HTTP "+rep.status)); }
+    const total=corps.total_count||0;
+    const items=(corps.results||[]).map(normaliser);
+    afficherCompteur(total);
+    afficherListe($("#liste"),items,"Aucun marché ne correspond à ces filtres. Essayez d'élargir la recherche (moins de départements, sans mots-clés, ou en décochant « encore ouverts »).");
+    afficherPagination(total);
+    majSnapshots(items);
+  }catch(e){
+    if(id!==requeteEnCours) return;
+    $("#nbRes").textContent="!";
+    $("#txtRes").innerHTML='Recherche impossible<small>Voir le détail ci-dessous</small>';
+    $("#liste").innerHTML='';
+    const div=document.createElement("div"); div.className="etat erreur";
+    div.innerHTML='<strong>Le BOAMP n\'a pas pu être interrogé.</strong><br>Vérifiez la connexion internet, puis relancez. Si le problème persiste, le message technique ci-dessous m\'aidera à corriger :<br><code></code>';
+    div.querySelector("code").textContent=e.message+"  |  where = "+where;
+    $("#liste").appendChild(div);
+  }
+}
+function afficherCompteur(total){
+  $("#nbRes").textContent=total.toLocaleString("fr-FR");
+  const debut=etat.page*PAR_PAGE+1, fin=Math.min(total,(etat.page+1)*PAR_PAGE);
+  const s=total>1?"s":"";
+  $("#txtRes").innerHTML=(total>1?"marchés trouvés":"marché trouvé")+'<small>'+(total?("Affichage "+debut+" à "+fin+" · source BOAMP, mise à jour quotidienne"):"Aucun résultat")+'</small>';
+}
+function afficherPagination(total){
+  const nbPages=Math.min(Math.ceil(total/PAR_PAGE),Math.floor(10000/PAR_PAGE));
+  const p=$("#pagination"); p.innerHTML="";
+  if(nbPages<=1) return;
+  const b=(lib,page,dis)=>{ const x=document.createElement("button"); x.type="button"; x.className="btn"; x.textContent=lib; if(dis) x.setAttribute("aria-disabled","true"); x.onclick=()=>{ rechercher(page); window.scrollTo({top:0,behavior:"smooth"}); }; return x; };
+  p.append(b("‹ Précédent",etat.page-1,etat.page===0));
+  const s=document.createElement("span"); s.textContent="Page "+(etat.page+1)+" / "+nbPages; p.append(s);
+  p.append(b("Suivant ›",etat.page+1,etat.page>=nbPages-1));
+}
+
+/* ====================================================================
+   Affichage des encarts
+   ==================================================================== */
+function fmtDate(iso,heure){
+  if(!iso) return "";
+  const d=new Date(iso); if(isNaN(d)) return iso;
+  const opt={day:"2-digit",month:"2-digit",year:"numeric"};
+  if(heure&&/T\d\d:\d\d/.test(iso)&&!/T00:00(:00)?/.test(iso)) Object.assign(opt,{hour:"2-digit",minute:"2-digit"});
+  return d.toLocaleString("fr-FR",opt).replace(",", " à");
+}
+function joursRestants(iso){
+  if(!iso) return null;
+  const d=new Date(iso); if(isNaN(d)) return null;
+  const auj=new Date(); auj.setHours(0,0,0,0);
+  const c=new Date(d); c.setHours(0,0,0,0);
+  return Math.round((c-auj)/86400000);
+}
+function metiersCpv(cpv){
+  const r=new Set();
+  for(const c of cpv) for(const m of METIERS) if(m.cpv.some(p=>c.startsWith(p))) r.add(m.nom.split(",")[0]);
+  return [...r];
+}
+function el(tag,attrs={},...enfants){
+  const e=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs)){
+    if(v==null||v===false) continue;
+    if(k==="class") e.className=v; else if(k==="text") e.textContent=v; else if(k.startsWith("on")) e[k]=v; else e.setAttribute(k,v===true?"":v);
+  }
+  for(const c of enfants.flat()) if(c!=null&&c!==false) e.append(c.nodeType?c:document.createTextNode(String(c)));
+  return e;
+}
+
+function carte(m){
+  const st=statuts[m.idweb]&&statuts[m.idweb].statut;
+  const c=el("article",{class:"carte"+(st?" statut-"+st:""),"data-id":m.idweb});
+
+  // Badges
+  const badges=el("div",{class:"badges"});
+  if(visitePrecedente&&m.parution&&new Date(m.parution)>new Date(visitePrecedente)) badges.append(el("span",{class:"badge nouveau",text:"Nouveau"}));
+  m.types.forEach(t=>badges.append(el("span",{class:"badge "+t.toLowerCase(),text:t.charAt(0)+t.slice(1).toLowerCase()})));
+  if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
+  const plat=plateformeDe(m.urlDocs||m.urlDepot||m.urlProfil);
+  if(plat) badges.append(el("span",{class:"badge plateforme",title:plat.compte||"",text:"DCE sur "+plat.nom}));
+
+  // Échéance
+  const j=joursRestants(m.limite);
+  const ech=el("div",{class:"echeance"+(j!=null&&j<0?" passe":j!=null&&j<=7?" urgent":"")});
+  if(m.limite){
+    ech.append(el("div",{class:"j",text:j<0?"Clos":j===0?"Aujourd'hui":"J-"+j}));
+    ech.append(el("div",{class:"d",text:"Remise des offres : "+fmtDate(m.limite,true)}));
+  }else ech.append(el("div",{class:"d",text:"Date limite non précisée"}));
+
+  c.append(el("div",{class:"carte-tete"},
+    el("div",{class:"gauche"},badges,el("h3",{text:m.objet}),el("div",{class:"acheteur",text:m.acheteur})),
+    ech));
+
+  // Infos essentielles
+  const infos=el("dl",{class:"infos"});
+  const ajout=(lib,val)=>{ if(val) infos.append(el("div",{},el("dt",{text:lib}),el("dd",{text:val}))); };
+  ajout("Département",m.deps.map(d=>d+(NOM_DEP[d]?" · "+NOM_DEP[d]:"")).join(", "));
+  ajout("Lieu d'exécution",m.lieu);
+  ajout("Montant estimé",m.montant);
+  ajout("Durée",m.duree);
+  ajout("Procédure",m.procedure||m.famille);
+  ajout("Lots",m.lots.length?m.lots.length+" lots":"");
+  ajout("Publié le",fmtDate(m.parution));
+  ajout("Prestations",m.descripteurs.join(", "));
+  c.append(infos);
+
+  // Résumé
+  if(m.description&&m.description!==m.objet){
+    const p=el("p",{class:"resume coupe",text:m.description});
+    c.append(p);
+    if(m.description.length>260){
+      const b=el("button",{class:"lien-plus",type:"button",text:"Lire tout le résumé"});
+      b.onclick=()=>{ const ouvert=p.classList.toggle("coupe"); b.textContent=ouvert?"Lire tout le résumé":"Réduire"; };
+      c.append(b);
+    }
+  }
+  if(m.lots.length){
+    const det=el("details",{},el("summary",{text:"Voir les "+m.lots.length+" lots"}),el("ol",{class:"lots"},m.lots.map(l=>el("li",{text:l}))));
+    c.append(det);
+  }
+  if(m.cpv.length){
+    const met=metiersCpv(m.cpv);
+    c.append(el("div",{class:"cpv"},el("span",{text:"CPV :"}),m.cpv.slice(0,6).map(x=>el("code",{text:x})),m.cpv.length>6?el("span",{text:"+"+(m.cpv.length-6)}):null,met.map(x=>el("span",{class:"metier",text:x}))));
+  }
+
+  // Boutons RC / DCE / statuts
+  const cible=m.urlDocs||m.urlDepot||m.urlProfil;
+  const direct=u=>u&&/\.(pdf|zip|docx?|rar|7z)(\?|$)/i.test(u);
+  const lienRC=cible||m.urlAvis, lienDCE=cible||m.urlAvis;
+  const titreRC=cible?(direct(cible)?"Téléchargement direct":"Ouvre la consultation sur "+(plat?plat.nom:"la plateforme")+" : le RC s'y télécharge, seul ou dans le DCE. "+(plat&&plat.compte?plat.compte+".":"")):"Pas de lien de consultation dans l'annonce : ouvre l'avis BOAMP";
+  const docs=el("div",{class:"docs"},
+    el("a",{class:"btn btn-plein",href:lienRC,target:"_blank",rel:"noopener",title:titreRC},"⬇ RC"),
+    el("a",{class:"btn btn-rouge",href:lienDCE,target:"_blank",rel:"noopener",title:titreRC.replace("le RC s'y télécharge, seul ou dans le DCE","le DCE s'y télécharge")},"⬇ DCE"),
+    el("a",{class:"btn",href:m.urlAvis,target:"_blank",rel:"noopener"},"Avis BOAMP"));
+  const sts=el("div",{class:"statuts",role:"group","aria-label":"Statut de suivi"});
+  for(const [k,lib] of Object.entries(LIB_STATUT)){
+    const b=el("button",{type:"button",class:"statut","data-s":k,"aria-pressed":String(st===k),text:lib});
+    b.onclick=()=>changerStatut(m,k);
+    sts.append(b);
+  }
+  c.append(el("div",{class:"pied"},docs,sts));
+  const note = cible
+    ? (plat? (plat.nom+" · "+(plat.compte||"accès selon la plateforme")) : "Lien de consultation indiqué par l'acheteur")
+    : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";
+  c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:"Avis n° "+m.idweb+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
+  return c;
+}
+
+function afficherListe(cont,items,vide){
+  cont.innerHTML="";
+  if(!items.length){ cont.append(el("div",{class:"etat",text:vide})); return; }
+  const frag=document.createDocumentFragment();
+  items.forEach(m=>frag.append(carte(m)));
+  cont.append(frag);
+}
+
+/* ---------- Statuts ---------- */
+function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,refAcheteur}=m; return {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,refAcheteur}; }
+function changerStatut(m,k){
+  const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
+  if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
+  else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m)}; toast("« "+LIB_STATUT[k]+" » enregistré"); }
+  if(!ecrire(CLE_STATUTS,statuts)) toast("Attention : ce navigateur bloque l'enregistrement local");
+  document.querySelectorAll('.carte[data-id="'+CSS.escape(m.idweb)+'"]').forEach(c=>c.replaceWith(carte(m)));
+  majCompteSuivis();
+  if(!$("#vue-suivi").hidden) afficherSuivi();
+}
+function majSnapshots(items){ let chg=false; items.forEach(m=>{ if(statuts[m.idweb]){ statuts[m.idweb].m=snapshot(m); chg=true; } }); if(chg) ecrire(CLE_STATUTS,statuts); }
+function majCompteSuivis(){ $("#nbSuivis").textContent=Object.keys(statuts).length; }
+
+let filtreSuivi="";
+function afficherSuivi(){
+  const f=$("#suiviFiltres"); f.innerHTML="";
+  const tousS=Object.values(statuts);
+  const comptes={"":tousS.length}; Object.keys(LIB_STATUT).forEach(k=>comptes[k]=tousS.filter(s=>s.statut===k).length);
+  [["","Tous"],...Object.entries(LIB_STATUT)].forEach(([k,lib])=>{
+    const b=el("button",{type:"button",class:"statut","data-s":k||"lecture","aria-pressed":String(filtreSuivi===k),text:lib+" ("+comptes[k]+")"});
+    b.onclick=()=>{ filtreSuivi=k; afficherSuivi(); };
+    f.append(b);
+  });
+  const items=tousS.filter(s=>!filtreSuivi||s.statut===filtreSuivi)
+    .sort((a,b)=>(a.m.limite||"9999").localeCompare(b.m.limite||"9999")).map(s=>s.m);
+  afficherListe($("#listeSuivi"),items,"Aucun marché suivi pour l'instant. Dans la recherche, cliquez sur « Lecture », « En réflexion » ou « J'y réponds » sur un encart pour le retrouver ici.");
+}
+
+/* ---------- Multi-sélecteurs ---------- */
+function multiSelecteur(cont,options,choix,placeholder,surChange){
+  cont.innerHTML="";
+  const btn=el("button",{type:"button",class:"multi-btn","aria-expanded":"false"});
+  const pop=el("div",{class:"multi-pop",hidden:true});
+  const rech=el("input",{type:"search",placeholder:"Filtrer la liste…","aria-label":"Filtrer la liste"});
+  const lst=el("div",{class:"multi-liste"});
+  const puces=el("div",{class:"puces"});
+  pop.append(rech,lst);
+  cont.append(btn,pop,puces);
+  function rendre(){
+    btn.textContent=choix.length?choix.length+" sélectionné"+(choix.length>1?"s":""):placeholder;
+    const filtre=rech.value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+    lst.innerHTML="";
+    options.forEach(([v,lib])=>{
+      const norm=lib.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+      if(filtre&&!norm.includes(filtre)&&!v.toLowerCase().startsWith(filtre)) return;
+      const cb=el("input",{type:"checkbox",checked:choix.includes(v)});
+      cb.onchange=()=>{ const i=choix.indexOf(v); if(cb.checked&&i<0) choix.push(v); if(!cb.checked&&i>=0) choix.splice(i,1); rendrePuces(); btn.textContent=choix.length?choix.length+" sélectionné"+(choix.length>1?"s":""):placeholder; surChange(); };
+      lst.append(el("label",{},cb,lib));
+    });
+  }
+  function rendrePuces(){
+    puces.innerHTML="";
+    choix.forEach(v=>{
+      const lib=(options.find(o=>o[0]===v)||[v,v])[1];
+      const x=el("button",{type:"button","aria-label":"Retirer "+lib,text:"×"});
+      x.onclick=()=>{ choix.splice(choix.indexOf(v),1); rendrePuces(); rendre(); surChange(); };
+      puces.append(el("span",{class:"puce"},lib,x));
+    });
+  }
+  btn.onclick=()=>{ const ouvrir=pop.hidden; pop.hidden=!ouvrir; btn.setAttribute("aria-expanded",String(ouvrir)); if(ouvrir){ rech.value=""; rendre(); rech.focus(); } };
+  rech.oninput=rendre;
+  document.addEventListener("click",e=>{ if(!cont.contains(e.target)){ pop.hidden=true; btn.setAttribute("aria-expanded","false"); } });
+  rendre(); rendrePuces();
+  return {rafraichir(){ rendre(); rendrePuces(); }};
+}
+
+/* ---------- Filtres : sauvegarde / restauration ---------- */
+function sauverFiltres(){
+  ecrire(CLE_FILTRES,{type:etat.type,metiers:etat.metiers,deps:etat.deps,mots:$("#fMots").value,complet:$("#fTexteComplet").checked,acheteur:$("#fAcheteur").value,nature:$("#fNature").value,publie:$("#fPublie").value,enCours:$("#fEnCours").checked,tri:$("#fTri").value});
+}
+function restaurerFiltres(){
+  const f=lire(CLE_FILTRES,null); if(!f) return;
+  etat.type=f.type||""; etat.metiers.splice(0,etat.metiers.length,...(f.metiers||[])); etat.deps.splice(0,etat.deps.length,...(f.deps||[]));
+  $("#fMots").value=f.mots||""; $("#fTexteComplet").checked=!!f.complet; $("#fAcheteur").value=f.acheteur||"";
+  $("#fNature").value=f.nature??"APPEL_OFFRE"; $("#fPublie").value=f.publie||""; $("#fEnCours").checked=f.enCours!==false; $("#fTri").value=f.tri||"datelimitereponse asc";
+}
+function majSegments(){ document.querySelectorAll("#fType button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===etat.type))); }
+
+/* ---------- Sources ---------- */
+const SOURCES=[
+  {nom:"BOAMP",url:"https://www.boamp.fr/",etat:"ok",lib:"Intégré",txt:"API open data publique, interrogée en direct par cet outil. Filtres, compteur et encarts reposent sur ces données."},
+  {nom:"PLACE (État)",url:"https://www.marches-publics.gouv.fr/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique de recherche. Les marchés de l'État publiés au BOAMP renvoient vers PLACE. Le DCE s'y télécharge sans compte (identification facultative)."},
+  {nom:"Maximilien (Île-de-France)",url:"https://marches.maximilien.fr/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique. Même moteur que PLACE : DCE en général téléchargeable sans compte. Les annonces publiées au BOAMP y renvoient."},
+  {nom:"AWS-Achat",url:"https://www.marches-publics.info/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique. Compte entreprise gratuit souvent nécessaire pour télécharger le DCE."},
+  {nom:"achatpublic.com",url:"https://www.achatpublic.com/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique. Compte gratuit nécessaire pour télécharger le DCE."},
+  {nom:"e-marchespublics",url:"https://www.e-marchespublics.com/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique. Compte gratuit nécessaire pour télécharger le DCE."},
+];
+function afficherSources(){
+  const c=$("#sources"); c.innerHTML="";
+  SOURCES.forEach(s=>c.append(el("div",{class:"source"},
+    el("div",{style:"display:flex;justify-content:space-between;gap:8px;align-items:center"},el("h3",{text:s.nom}),el("span",{class:"tag "+s.etat,text:s.lib})),
+    el("p",{text:s.txt}),
+    el("a",{class:"btn",href:s.url,target:"_blank",rel:"noopener",style:"align-self:flex-start"},"Ouvrir le site"))));
+}
+
+/* ---------- Divers ---------- */
+function $(s){ return document.querySelector(s); }
+let toastT; function toast(t){ const e=$("#toast"); e.textContent=t; e.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>e.hidden=true,2200); }
+
+function changerVue(v){
+  document.querySelectorAll(".onglet").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.vue===v)));
+  ["recherche","suivi","sources"].forEach(x=>$("#vue-"+x).hidden=(x!==v));
+  if(v==="suivi") afficherSuivi();
+}
+
+/* ---------- Démarrage ---------- */
+let msMetiers, msDeps, minuterie;
+function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
+function init(){
+  restaurerFiltres(); majSegments();
+  msMetiers=multiSelecteur($("#fMetiers"),METIERS.map(m=>[m.id,m.nom]),etat.metiers,"Toutes les prestations",relancerBientot);
+  msDeps=multiSelecteur($("#fDeps"),DEPS.map(([c,n])=>[c,c+" · "+n]),etat.deps,"Toute la France",relancerBientot);
+  document.querySelectorAll("#fType button").forEach(b=>b.onclick=()=>{ etat.type=b.dataset.v; majSegments(); rechercher(0); });
+  ["#fNature","#fPublie","#fEnCours","#fTexteComplet","#fTri"].forEach(s=>$(s).addEventListener("change",()=>rechercher(0)));
+  $("#formFiltres").addEventListener("submit",e=>{ e.preventDefault(); rechercher(0); });
+  $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); rechercher(0); };
+  document.querySelectorAll(".onglet").forEach(b=>b.onclick=()=>changerVue(b.dataset.vue));
+  $("#btnExport").onclick=()=>{
+    const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts},null,2)],{type:"application/json"});
+    const a=el("a",{href:URL.createObjectURL(blob),download:"vigie-marches-statuts-"+dateIso(new Date())+".json"}); document.body.append(a); a.click(); a.remove();
+  };
+  $("#fichierImport").onchange=async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{ const j=JSON.parse(await f.text()); const s=j.statuts||j; if(typeof s!=="object") throw 0; statuts={...statuts,...s}; ecrire(CLE_STATUTS,statuts); majCompteSuivis(); afficherSuivi(); toast(Object.keys(s).length+" marchés restaurés"); }
+    catch(err){ toast("Fichier de sauvegarde illisible"); }
+    e.target.value="";
+  };
+  afficherSources(); majCompteSuivis();
+  rechercher(0);
+}
+init();
+</script>
+</body>
+</html>
