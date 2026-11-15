@@ -158,6 +158,9 @@ async function trouverConsultation(origine, ref, objet, limite) {
     const exacts = r.filter(x => new RegExp("(^|[^a-z0-9])" + nref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)").test(x.texte));
     const ids = [...new Set(exacts.map(x => x.id))];
     if (ids.length === 1) return exacts.find(x => x.id === ids[0]);
+    // la recherche par référence ne renvoie qu'une seule consultation : c'est elle
+    const tous = [...new Set(r.map(x => x.id))];
+    if (tous.length === 1) return r[0];
   }
   if (!objet) return null;
   const mots = [...new Set(norm(objet).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !MOTS_VIDES.has(w)))].slice(0, 7);
@@ -193,6 +196,9 @@ async function trouverConsultation(origine, ref, objet, limite) {
   if (tri[0] && tri[0].okDate && tri[0].ratio >= 0.5 && (!tri[1] || tri[1].score < tri[0].score)) return tri[0];
   return null;
 }
+
+process.on("uncaughtException", e => console.log("Erreur non gérée", e && e.stack));
+process.on("unhandledRejection", e => console.log("Promesse rejetée", e && e.stack));
 
 /* ---------- serveur HTTP ---------- */
 const derniers = new Map(); // limitation simple : 20 demandes / 10 min / adresse IP
