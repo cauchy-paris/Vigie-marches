@@ -75,6 +75,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .multi-liste label{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:13px}
 .multi-liste label:hover{background:var(--bleu-clair)}
 .multi-liste input{accent-color:var(--bleu)}
+.multi-groupe{position:sticky;top:0;background:var(--blanc);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--rouge);padding:8px 6px 4px;border-bottom:1px solid var(--trait)}
 .puces{display:flex;flex-wrap:wrap;gap:5px}
 .puce{display:inline-flex;align-items:center;gap:4px;background:var(--bleu-clair);color:var(--bleu-fonce);border-radius:999px;padding:2px 4px 2px 9px;font-size:12px;font-weight:500}
 .puce button{border:0;background:transparent;cursor:pointer;color:var(--bleu);font-weight:700;padding:0 4px;line-height:1}
@@ -218,7 +219,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
     <div class="champ">
       <span class="lbl">Type de prestation</span>
       <div class="multi" id="fMetiers"></div>
-      <span class="aide">Basé sur les descripteurs officiels du BOAMP (nomenclature des prestations), plus fiable que les mots-clés.</span>
+      <span class="aide" id="aidePrestations">Basé sur les descripteurs officiels du BOAMP (nomenclature des prestations), plus fiable que les mots-clés.</span>
     </div>
 
     <div class="champ">
@@ -402,6 +403,47 @@ const METIERS = [
   {id:"informatique",nom:"Informatique, logiciels",        termes:["informatique","logiciel"],                       cpv:["48","72","302"]},
   {id:"moe",        nom:"Maîtrise d'œuvre, études",        termes:["maîtrise d'œuvre","études","architecture"],      cpv:["71"]},
 ];
+
+/* ---------- Descripteurs BOAMP par type de marché ----------
+   Liste de base, complétée au chargement par la liste réelle tirée du BOAMP
+   (tous les descripteurs utilisés sur 2 ans, avec leur nombre d'annonces). */
+const PRESTATIONS_BASE={
+  TRAVAUX:["Ascenseur","Assainissement","Bâtiment","Carrelage","Charpente","Chauffage","Climatisation","Clôture","Cloisons","Construction","Couverture","Démolition","Désamiantage","Eclairage public","Electricité","Equipements sportifs","Espaces verts","Etanchéité","Faux plafonds","Façades","Génie civil","Gros œuvre","Isolation","Maçonnerie","Menuiserie","Métallerie","Mobilier urbain","Ouvrages d'art","Peinture","Plâtrerie","Plomberie","Ravalement","Réhabilitation","Réseaux","Revêtements de sols","Rénovation","Second œuvre","Serrurerie","Signalisation","Sanitaire","Terrassement","Travaux maritimes","Ventilation","Vitrerie","Voirie","VRD"],
+  SERVICES:["Assistance à maîtrise d'ouvrage","Assurance","Audit","Communication","Conseil","Contrôle technique","Coordination SPS","Déchets","Déménagement","Diagnostic","Entretien","Etudes","Evénementiel","Formation","Gardiennage","Géomètre","Hébergement","Impression","Informatique","Ingénierie","Juridique","Location","Maintenance","Maîtrise d'œuvre","Nettoyage","Prestations intellectuelles","Propreté","Restauration collective","Sécurité","Services sociaux","Surveillance","Télécommunications","Transport","Transport scolaire","Travail temporaire"],
+  FOURNITURES:["Alimentation","Carburant","Consommables","Denrées alimentaires","Electricité (énergie)","Equipement","Fournitures de bureau","Fournitures scolaires","Gaz","Habillement","Livres","Logiciels","Matériel informatique","Matériel médical","Mobilier","Médicaments","Papier","Produits d'entretien","Véhicules","Vêtements de travail"],
+};
+const TYPES_LIB={TRAVAUX:"Travaux",SERVICES:"Services",FOURNITURES:"Fournitures"};
+let PRESTATIONS={TRAVAUX:PRESTATIONS_BASE.TRAVAUX.map(n=>({nom:n,n:null})),SERVICES:PRESTATIONS_BASE.SERVICES.map(n=>({nom:n,n:null})),FOURNITURES:PRESTATIONS_BASE.FOURNITURES.map(n=>({nom:n,n:null}))};
+let prestationsReelles=false;
+const CLE_DESC="vigie.descripteurs.v1";
+async function chargerDescripteurs(){
+  const cache=lire(CLE_DESC,null);
+  if(cache&&cache.date&&(Date.now()-new Date(cache.date))<7*86400000&&cache.liste){ PRESTATIONS=cache.liste; prestationsReelles=true; return true; }
+  const depuis=new Date(); depuis.setFullYear(depuis.getFullYear()-2);
+  const res={};
+  for(const t of Object.keys(TYPES_LIB)){
+    const params=new URLSearchParams({select:"descripteur_libelle, count(*) as n",group_by:"descripteur_libelle",where:'type_marche="'+t+'" AND dateparution>=date\''+dateIso(depuis)+'\''});
+    const rep=await fetch(API.replace(/records$/,"exports/json")+"?"+params);
+    if(!rep.ok) throw new Error("HTTP "+rep.status);
+    const lignes=await rep.json();
+    const cpt=new Map();
+    lignes.forEach(l=>liste(l.descripteur_libelle).forEach(nom=>{ if(nom) cpt.set(nom,(cpt.get(nom)||0)+(l.n||0)); }));
+    if(!cpt.size) throw new Error("liste vide");
+    res[t]=[...cpt].map(([nom,n])=>({nom,n})).sort((a,b)=>a.nom.localeCompare(b.nom,"fr"));
+  }
+  PRESTATIONS=res; prestationsReelles=true;
+  ecrire(CLE_DESC,{date:new Date().toISOString(),liste:res});
+  return true;
+}
+function optionsPrestations(){
+  const opts=METIERS.map(m=>["m:"+m.id,m.nom,"Regroupements par métier"]);
+  const types=etat.type?[etat.type]:Object.keys(TYPES_LIB);
+  types.forEach(t=>(PRESTATIONS[t]||[]).forEach(p=>opts.push(["d:"+p.nom,p.nom+(p.n?"  ("+p.n.toLocaleString("fr-FR")+")":""),TYPES_LIB[t]+" · toutes les prestations BOAMP"])));
+  // garder visibles les choix déjà faits même s'ils ne sont plus dans la liste
+  etat.metiers.forEach(v=>{ if(!opts.some(o=>o[0]===v)) opts.push([v,libChoix(v),"Déjà sélectionnés"]); });
+  return opts;
+}
+function libChoix(v){ if(v.startsWith("d:")) return v.slice(2); const id=v.replace(/^m:/,""); const m=METIERS.find(x=>x.id===id); return m?m.nom:v; }
 
 /* ---------- Départements ---------- */
 const DEPS = [["01","Ain"],["02","Aisne"],["03","Allier"],["04","Alpes-de-Haute-Provence"],["05","Hautes-Alpes"],["06","Alpes-Maritimes"],["07","Ardèche"],["08","Ardennes"],["09","Ariège"],["10","Aube"],["11","Aude"],["12","Aveyron"],["13","Bouches-du-Rhône"],["14","Calvados"],["15","Cantal"],["16","Charente"],["17","Charente-Maritime"],["18","Cher"],["19","Corrèze"],["2A","Corse-du-Sud"],["2B","Haute-Corse"],["21","Côte-d'Or"],["22","Côtes-d'Armor"],["23","Creuse"],["24","Dordogne"],["25","Doubs"],["26","Drôme"],["27","Eure"],["28","Eure-et-Loir"],["29","Finistère"],["30","Gard"],["31","Haute-Garonne"],["32","Gers"],["33","Gironde"],["34","Hérault"],["35","Ille-et-Vilaine"],["36","Indre"],["37","Indre-et-Loire"],["38","Isère"],["39","Jura"],["40","Landes"],["41","Loir-et-Cher"],["42","Loire"],["43","Haute-Loire"],["44","Loire-Atlantique"],["45","Loiret"],["46","Lot"],["47","Lot-et-Garonne"],["48","Lozère"],["49","Maine-et-Loire"],["50","Manche"],["51","Marne"],["52","Haute-Marne"],["53","Mayenne"],["54","Meurthe-et-Moselle"],["55","Meuse"],["56","Morbihan"],["57","Moselle"],["58","Nièvre"],["59","Nord"],["60","Oise"],["61","Orne"],["62","Pas-de-Calais"],["63","Puy-de-Dôme"],["64","Pyrénées-Atlantiques"],["65","Hautes-Pyrénées"],["66","Pyrénées-Orientales"],["67","Bas-Rhin"],["68","Haut-Rhin"],["69","Rhône"],["70","Haute-Saône"],["71","Saône-et-Loire"],["72","Sarthe"],["73","Savoie"],["74","Haute-Savoie"],["75","Paris"],["76","Seine-Maritime"],["77","Seine-et-Marne"],["78","Yvelines"],["79","Deux-Sèvres"],["80","Somme"],["81","Tarn"],["82","Tarn-et-Garonne"],["83","Var"],["84","Vaucluse"],["85","Vendée"],["86","Vienne"],["87","Haute-Vienne"],["88","Vosges"],["89","Yonne"],["90","Territoire de Belfort"],["91","Essonne"],["92","Hauts-de-Seine"],["93","Seine-Saint-Denis"],["94","Val-de-Marne"],["95","Val-d'Oise"],["971","Guadeloupe"],["972","Martinique"],["973","Guyane"],["974","La Réunion"],["976","Mayotte"]];
@@ -609,8 +651,12 @@ function construireWhere(){
   const cibles=depsCibles(etat.regions,etat.deps);
   if(cibles.length) w.push("("+cibles.map(d=>"code_departement="+q(d)).join(" OR ")+")");
   if(etat.metiers.length){
-    const termes=etat.metiers.flatMap(id=>(METIERS.find(m=>m.id===id)||{termes:[]}).termes);
-    w.push("("+termes.map(t=>"search(descripteur_libelle,"+q(t)+")").join(" OR ")+")");
+    const conds=[];
+    etat.metiers.forEach(v=>{
+      if(v.startsWith("d:")) conds.push(prestationsReelles?"descripteur_libelle="+q(v.slice(2)):"search(descripteur_libelle,"+q(v.slice(2))+")");
+      else (METIERS.find(m=>m.id===v.replace(/^m:/,""))||{termes:[]}).termes.forEach(t=>conds.push("search(descripteur_libelle,"+q(t)+")"));
+    });
+    if(conds.length) w.push("("+conds.join(" OR ")+")");
   }
   const ach=$("#fAcheteur").value.trim(); if(ach) w.push("search(nomacheteur,"+q(ach)+")");
   const mots=$("#fMots").value.trim();
@@ -827,6 +873,7 @@ function afficherSuivi(){
 /* ---------- Multi-sélecteurs ---------- */
 function multiSelecteur(cont,options,choix,placeholder,surChange){
   cont.innerHTML="";
+  const opts=typeof options==="function"?options:()=>options;
   const btn=el("button",{type:"button",class:"multi-btn","aria-expanded":"false"});
   const pop=el("div",{class:"multi-pop",hidden:true});
   const rech=el("input",{type:"search",placeholder:"Filtrer la liste…","aria-label":"Filtrer la liste"});
@@ -838,18 +885,20 @@ function multiSelecteur(cont,options,choix,placeholder,surChange){
     btn.textContent=choix.length?choix.length+" sélectionné"+(choix.length>1?"s":""):placeholder;
     const filtre=rech.value.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
     lst.innerHTML="";
-    options.forEach(([v,lib])=>{
+    let groupe=null;
+    opts().forEach(([v,lib,g])=>{
       const norm=lib.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
       if(filtre&&!norm.includes(filtre)&&!v.toLowerCase().startsWith(filtre)) return;
       const cb=el("input",{type:"checkbox",checked:choix.includes(v)});
       cb.onchange=()=>{ const i=choix.indexOf(v); if(cb.checked&&i<0) choix.push(v); if(!cb.checked&&i>=0) choix.splice(i,1); rendrePuces(); btn.textContent=choix.length?choix.length+" sélectionné"+(choix.length>1?"s":""):placeholder; surChange(); };
+      if(g&&g!==groupe){ groupe=g; lst.append(el("div",{class:"multi-groupe",text:g})); }
       lst.append(el("label",{},cb,lib));
     });
   }
   function rendrePuces(){
     puces.innerHTML="";
     choix.forEach(v=>{
-      const lib=(options.find(o=>o[0]===v)||[v,v])[1];
+      const o=opts().find(o=>o[0]===v); const lib=o?String(o[1]).replace(/\s+\(\d[\d\s\u202f]*\)$/,""):v;
       const x=el("button",{type:"button","aria-label":"Retirer "+lib,text:"×"});
       x.onclick=()=>{ choix.splice(choix.indexOf(v),1); rendrePuces(); rendre(); surChange(); };
       puces.append(el("span",{class:"puce"},lib,x));
@@ -908,10 +957,13 @@ let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
 function init(){
   restaurerFiltres(); majSegments();
-  msMetiers=multiSelecteur($("#fMetiers"),METIERS.map(m=>[m.id,m.nom]),etat.metiers,"Toutes les prestations",relancerBientot);
+  // anciens choix enregistrés sans préfixe = regroupements métier
+  etat.metiers.forEach((v,i)=>{ if(!/^[md]:/.test(v)) etat.metiers[i]="m:"+v; });
+  msMetiers=multiSelecteur($("#fMetiers"),optionsPrestations,etat.metiers,"Toutes les prestations",relancerBientot);
+  chargerDescripteurs().then(()=>{ msMetiers.rafraichir(); $("#aidePrestations").textContent="Liste complète des prestations du BOAMP, avec le nombre d'annonces sur 2 ans, plus des regroupements par métier. Elle suit le type de marché choisi."; }).catch(()=>{});
   msRegions=multiSelecteur($("#fRegions"),REGIONS.map(r=>[r[0],r[1]]),etat.regions,"Toutes les régions",relancerBientot);
   msDeps=multiSelecteur($("#fDeps"),DEPS.map(([c,n])=>[c,c+" · "+n]),etat.deps,"Toute la France",relancerBientot);
-  document.querySelectorAll("#fType button").forEach(b=>b.onclick=()=>{ etat.type=b.dataset.v; majSegments(); rechercher(0); });
+  document.querySelectorAll("#fType button").forEach(b=>b.onclick=()=>{ etat.type=b.dataset.v; majSegments(); msMetiers.rafraichir(); rechercher(0); });
   ["#fNature","#fPublie","#fEnCours","#fTexteComplet","#fTri"].forEach(s=>$(s).addEventListener("change",()=>rechercher(0)));
   $("#formFiltres").addEventListener("submit",e=>{ e.preventDefault(); rechercher(0); });
   $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; etat.regions.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); msRegions.rafraichir(); rechercher(0); };
@@ -1025,12 +1077,12 @@ function paginer(p,total,page,fn){
 }
 function historiqueAcheteur(m){
   $("#formDecp").reset(); $("#dPeriode").value="1095";
-  dEtat.deps.length=0; dEtat.regions.length=0; dMsRegions.rafraichir(); dEtat.metiers.splice(0,dEtat.metiers.length,...etat.metiers);
+  dEtat.deps.length=0; dEtat.regions.length=0; dMsRegions.rafraichir(); dEtat.metiers.splice(0,dEtat.metiers.length,...etat.metiers.filter(v=>v.startsWith("m:")).map(v=>v.slice(2)));
   $("#dAcheteur").value=m.acheteur;
   dMsMetiers.rafraichir(); dMsDeps.rafraichir();
   dLance=true; changerVue("attribues"); window.scrollTo({top:0});
   rechercherDecp(0);
-  if(etat.metiers.length) toast("Historique de l'acheteur, filtré sur vos types de prestation");
+  if(dEtat.metiers.length) toast("Historique de l'acheteur, filtré sur vos types de prestation");
 }
 let dLance=false;
 function initDecp(){
