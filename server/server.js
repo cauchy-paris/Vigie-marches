@@ -135,10 +135,12 @@ async function chercher(origine, motCle) {
   let m;
   while ((m = re.exec(html))) liens.push({ id: m[1], org: m[2], pos: m.index });
   // texte autour de chaque lien, pour retrouver la référence et l'intitulé
-  return liens.map((l, i) => {
+  const r = liens.map((l, i) => {
     const debut = i > 0 ? liens[i - 1].pos : Math.max(0, l.pos - 6000);
     return { id: l.id, org: l.org, texte: norm(html.slice(debut, l.pos).replace(/<[^>]+>/g, " ")) };
   });
+  if (TRACE) TRACE.push({ recherche: motCle, statut: rep.status, nb: (html.match(/Nombre de r[ée]sultats[^0-9]{0,40}(\d+)/i) || [])[1], liens: r.slice(0, 8).map(x => x.id + " | " + x.texte.slice(-160)) });
+  return r;
 }
 async function trouverConsultation(origine, ref, objet) {
   const vus = new Map();
