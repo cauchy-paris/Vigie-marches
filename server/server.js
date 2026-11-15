@@ -167,9 +167,8 @@ async function trouverConsultation(origine, ref, objet, limite) {
   const essais = [mots];
   if (mots.length > 1) for (let k = mots.length - 1; k >= 0 && essais.length < 7; k--) essais.push(mots.filter((_, i) => i !== k));
   const candidats = new Map();
-  for (const e of essais) {
-    let r;
-    try { r = await chercher(origine, e.join(" ")); } catch (err) { continue; }
+  const resultats = await Promise.all(essais.map(e => chercher(origine, e.join(" ")).catch(() => [])));
+  for (const r of resultats) {
     for (const x of r) {
       const ratio = mots.filter(w => x.texte.includes(w)).length / mots.length;
       const okDate = date ? date.test(x.texte) : false;
@@ -177,6 +176,8 @@ async function trouverConsultation(origine, ref, objet, limite) {
       const prec = candidats.get(x.id);
       if (!prec || prec.score < score) candidats.set(x.id, { ...x, score, ratio, okDate });
     }
+  }
+  {
     const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
     const meilleur = tri[0], second = tri[1];
     const net = !second || meilleur.score - second.score >= 0.25;
