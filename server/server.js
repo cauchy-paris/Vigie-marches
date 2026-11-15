@@ -139,7 +139,7 @@ async function chercher(origine, motCle) {
     const debut = i > 0 ? liens[i - 1].pos : Math.max(0, l.pos - 6000);
     return { id: l.id, org: l.org, texte: norm(html.slice(debut, l.pos).replace(/<[^>]+>/g, " ")) };
   });
-  if (TRACE) TRACE.push({ recherche: motCle, statut: rep.status, nb: (html.match(/Nombre de r[ée]sultats[^0-9]{0,40}(\d+)/i) || [])[1], liens: r.slice(0, 8).map(x => x.id + " | " + x.texte.slice(-160)) });
+  if (TRACE) TRACE.push({ recherche: motCle, statut: rep.status, nb: (html.match(/Nombre de r[ée]sultats[^0-9]{0,40}(\d+)/i) || [])[1], liens: r.slice(0, 40).map(x => x.id + " | " + x.texte.slice(-160)) });
   return r;
 }
 async function trouverConsultation(origine, ref, objet) {
@@ -202,6 +202,15 @@ http.createServer(async (req, res) => {
     } catch (e) { resultat = { ok: false, erreur: e.message }; }
     const t = TRACE; TRACE = null;
     res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    if (u.searchParams.get("court")) {
+      const l = ["RESULTAT ok=" + resultat.ok + " erreur=" + (resultat.erreur || "-") + " type=" + (resultat.type || "-")];
+      for (const x of t) {
+        if (x.recherche !== undefined) l.push("RECHERCHE [" + x.recherche + "] statut=" + x.statut + " nb=" + x.nb + " ids=" + [...new Set(x.liens.map(y => y.split(" | ")[0]))].join(","));
+        if (x.trouve !== undefined) l.push("TROUVE " + JSON.stringify(x.trouve));
+        if (x.statut !== undefined && x.methode) l.push(x.methode + " " + x.statut + " " + x.url.slice(0, 140));
+      }
+      return res.end(l.join("\n"));
+    }
     return res.end(JSON.stringify({ resultat, trace: t }, null, 1));
   }
   if (u.pathname !== "/dce") { res.writeHead(404); return res.end("Introuvable"); }
