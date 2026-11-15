@@ -124,7 +124,9 @@ async function telechargerDce(origine, id, org) {
 }
 
 /* ---------- retrouver une consultation par sa référence ---------- */
-const norm = t => (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+const ENT = { eacute: "é", egrave: "è", ecirc: "ê", agrave: "à", acirc: "â", ccedil: "ç", ocirc: "ô", ucirc: "û", icirc: "î", ugrave: "ù", nbsp: " ", amp: "&", quot: '"', laquo: "«", raquo: "»", rsquo: "'", apos: "'" };
+const decode = t => t.replace(/&([a-z]+);/gi, (m, n) => ENT[n.toLowerCase()] ?? " ").replace(/&#(\d+);/g, (m, n) => String.fromCharCode(+n));
+const norm = t => decode(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
 async function chercher(origine, motCle) {
   const jar = new Map();
   const url = origine + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(motCle);
@@ -199,7 +201,7 @@ async function trouverConsultation(origine, ref, objet, limite) {
     if (meilleur && net && ((meilleur.okDate && meilleur.ratio >= 0.5) || (!date && meilleur.ratio >= 0.85))) return meilleur;
   }
   const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
-  if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate) });
+  if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate) }, { extrait: tri[0] ? tri[0].texte.slice(0, 600) : "" });
   if (tri[0] && tri[0].okDate && tri[0].ratio >= 0.5 && (!tri[1] || tri[1].score < tri[0].score)) return tri[0];
   return null;
 }
@@ -249,6 +251,7 @@ http.createServer(async (req, res) => {
         if (x.recherche !== undefined) l.push("RECHERCHE [" + x.recherche + "] statut=" + x.statut + " nb=" + x.nb + " ids=" + [...new Set(x.liens.map(y => y.split(" | ")[0]))].join(","));
         if (x.trouve !== undefined) l.push("TROUVE " + JSON.stringify(x.trouve));
         if (x.candidats) l.push("CANDIDATS " + x.candidats.join(" ; "));
+        if (x.extrait) l.push("EXTRAIT " + x.extrait);
         if (x.statut !== undefined && x.methode) l.push(x.methode + " " + x.statut + " " + x.url.slice(0, 140));
       }
       return res.end(l.join("\n"));
