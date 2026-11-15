@@ -498,7 +498,7 @@ function atexoParRecherche(m){
     let x; try{ x=new URL(u); }catch(e){ continue; }
     if(!HOTES_ATEXO.test(x.hostname)) continue;
     const refs=[m.refDocs,m.refAcheteur].filter(r=>r&&r.length>=3&&r.length<=60&&!/^(LOT|ORG|PAR|RES|TPO)-\d+$/i.test(r)&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(r));
-    const q="origine="+encodeURIComponent(x.origin)+(refs[0]?"&ref="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200));
+    const q="origine="+encodeURIComponent(x.origin)+(refs[0]?"&reference="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200));
     return {rc:SERVEUR_DCE+"/dce?quoi=rc&"+q, dceAuto:SERVEUR_DCE+"/dce?"+q, consultation:SERVEUR_DCE+"/dce?quoi=consultation&"+q, recherche:true};
   }
   return null;

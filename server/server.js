@@ -194,7 +194,7 @@ http.createServer(async (req, res) => {
     let resultat;
     try {
       const h = new URL(o).hostname;
-      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("ref") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
+      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
       if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
       const r = await telechargerDce(new URL(o).origin, id, org);
       resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
@@ -218,7 +218,7 @@ http.createServer(async (req, res) => {
   const origine = u.searchParams.get("origine") || "";
   let id = u.searchParams.get("id") || "";
   let org = u.searchParams.get("org") || "";
-  const ref = (u.searchParams.get("ref") || "").slice(0, 80);
+  const ref = (u.searchParams.get("reference") || "").slice(0, 80);
   const objet = (u.searchParams.get("objet") || "").slice(0, 300);
   const quoi = u.searchParams.get("quoi") || "dce"; // dce | rc | consultation
   let hote;
