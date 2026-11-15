@@ -5,6 +5,7 @@
 const http = require("http");
 const { extraire, extraireTous, analyser } = require("./analyse");
 const { textePdf, analyserTexte } = require("./regles");
+const onedrive = require("./onedrive");
 
 const PORT = process.env.PORT || 10000;
 const UA = "Mozilla/5.0 (compatible; VigieMarches/1.0; veille marches publics)";
@@ -317,6 +318,54 @@ async function routeAnalyse(req, res, u) {
   }
 }
 
+
+/* ---------- dépôt dans OneDrive (connexion Microsoft de l'utilisateur) ---------- */
+async function routeOneDrive(req, res, u) {
+  const o = req.headers.origin;
+  const autorise = o && ORIGINES.has(o) ? o : null;
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, autorise ? { "Access-Control-Allow-Origin": autorise, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type, Authorization", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {});
+    return res.end();
+  }
+  if (req.method !== "POST") return json(res, 405, { erreur: "POST attendu" }, autorise);
+  if (!autorise) return json(res, 403, { erreur: "Origine non autorisée" });
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (!token || token.length > 10000) return json(res, 401, { erreur: "connexion", message: "Connexion Microsoft manquante." }, autorise);
+  let c;
+  try { c = JSON.parse(await lireCorps(req, 20000)); } catch (e) { return json(res, 400, { erreur: "Demande illisible" }, autorise); }
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (tropDeDemandes(ip)) return json(res, 429, { erreur: "quota", message: "Trop de demandes en peu de temps, réessayez dans quelques minutes." }, autorise);
+  const driveId = String(c.driveId || ""), parentId = String(c.parentId || ""), nom = String(c.dossier || "").slice(0, 150);
+  if (!/^[\w!.-]{5,200}$/.test(driveId) || !/^[\w!.-]{5,200}$/.test(parentId) || !nom) return json(res, 400, { erreur: "parametres", message: "Dossier OneDrive non configuré." }, autorise);
+  const r = { ok: true, dossier: nom, webUrl: "", fichiers: 0, total: 0, erreurs: [], dce: "" };
+  try {
+    const dossier = await onedrive.creerDossier(token, driveId, parentId, nom);
+    r.webUrl = dossier.webUrl || "";
+    // le DCE, si la plateforme permet le retrait anonyme
+    const origine = String(c.origine || "");
+    if (!origine) { r.dce = "absent"; return json(res, 200, r, autorise); }
+    let base;
+    try { base = new URL(origine); if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw 0; } catch (e) { r.dce = "absent"; return json(res, 200, r, autorise); }
+    let id = String(c.id || ""), org = String(c.org || "");
+    if (!id) { const t = await trouverConsultation(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300), String(c.limite || "").slice(0, 25)).catch(() => null); if (t) { id = t.id; org = t.org; } }
+    if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; return json(res, 200, r, autorise); }
+    let rep;
+    try { rep = await telechargerDce(base.origin, id, org); } catch (e) { r.dce = "echec"; r.message = e.message; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
+    const taille = Number(rep.headers.get("content-length") || 0);
+    if (taille > 300e6) { try { await rep.body.cancel(); } catch (e) {} r.dce = "trop_gros"; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
+    const buf = Buffer.from(await rep.arrayBuffer());
+    const cd = rep.headers.get("content-disposition") || "";
+    const nomArchive = (cd.match(/filename="?([^";]+)/i) || [])[1] || "DCE_" + id + ".zip";
+    const d = await onedrive.deposerDce(token, driveId, dossier.id, nomArchive, buf);
+    Object.assign(r, d, { dce: "ok", taille: buf.length });
+    console.log(new Date().toISOString(), "ONEDRIVE OK", id, org, d.fichiers + "/" + d.total);
+    return json(res, 200, r, autorise);
+  } catch (e) {
+    console.log(new Date().toISOString(), "ONEDRIVE ECHEC", e.status || "", e.message);
+    return json(res, e.status === 401 ? 401 : 502, { erreur: e.status === 401 ? "connexion" : "onedrive", message: e.message, ...r, ok: false }, autorise);
+  }
+}
+
 /* ---------- serveur HTTP ---------- */
 const derniers = new Map(); // limitation simple : 20 demandes / 10 min / adresse IP
 function tropDeDemandes(ip) {
@@ -343,6 +392,7 @@ http.createServer(async (req, res) => {
     res.setHeader("Vary", "Origin");
   }
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
     TRACE = [];

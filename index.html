@@ -172,6 +172,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .lot-mt{color:var(--gris)}
 .ia-source{margin:0;font-size:12px;color:var(--gris)}
 .journal{position:fixed;right:16px;bottom:16px;z-index:60;width:min(420px,calc(100vw - 32px));background:var(--blanc);border:2px solid var(--bleu);border-top:6px solid var(--rouge);border-radius:10px;box-shadow:0 12px 36px rgba(13,34,87,.25);padding:14px 16px;display:grid;gap:10px}
+.sous-titre{margin:16px 0 4px;font-size:14px;color:var(--bleu)}
 .journal h3{margin:0;font-size:15px;color:var(--bleu)}
 .journal-lignes{margin:0;padding-left:0;list-style:none;display:grid;gap:6px;font-size:13.5px;overflow-wrap:anywhere}
 .journal-lignes .ok{color:#14603a}
@@ -329,8 +330,17 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
         <label class="btn" for="fichierImport">Restaurer une sauvegarde</label>
         <input type="file" id="fichierImport" accept=".json,application/json" hidden>
       </div>
-      <p class="note-docs" style="margin-top:12px">Dossiers de réponse : quand vous cliquez « J'y réponds », l'appli crée le dossier de la consultation et y dézippe le DCE. Dossier OneDrive choisi : <strong id="racineNom">…</strong></p>
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn" id="btnRacine" type="button">Choisir le dossier OneDrive</button></div>
+      <h3 class="sous-titre">Dossiers de réponse</h3>
+      <p class="note-docs">Quand vous cliquez « J'y réponds », l'appli crée le dossier de la consultation dans OneDrive et y dépose le DCE dézippé.</p>
+      <div id="blocMs" hidden>
+        <p class="note-docs" style="margin-top:8px"><strong>OneDrive en ligne</strong> (PC, téléphone, tablette) : <span id="msEtat">non connecté</span></p>
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-plein" id="btnMs" type="button">Se connecter à Microsoft</button></div>
+        <label class="note-docs" for="lienOd" style="display:block;margin-top:10px">Lien de partage du dossier OneDrive où ranger les réponses :</label>
+        <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap"><input type="text" id="lienOd" placeholder="https://…-my.sharepoint.com/:f:/…" style="flex:1;min-width:200px"><button class="btn" id="btnLienOd" type="button">Enregistrer</button></div>
+        <p class="note-docs" id="odEtat" style="margin-top:4px"></p>
+      </div>
+      <p class="note-docs" style="margin-top:10px"><strong>Dossier OneDrive du PC</strong> (Chrome ou Edge) : <span id="racineNom">…</span></p>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn" id="btnRacine" type="button">Choisir le dossier du PC</button></div>
     </div>
     <div id="listeSuivi" style="display:grid;gap:14px"></div>
   </section>
@@ -1090,10 +1100,78 @@ function journal(titre){
   document.body.append(journalEl);
   return { ligne:(t,cls)=>{ const li=el("li",{class:cls||"",text:t}); lignes.append(li); return li; } };
 }
+/* ---------- Connexion Microsoft (OneDrive en ligne) ----------
+   Application déclarée dans Microsoft Entra par 4G Ingénierie (identifiants publics, pas de secret). */
+const MS_CLIENT_ID="", MS_TENANT="";
+const MS_SCOPES=["Files.ReadWrite","User.Read"];
+const CLE_OD="vigie.onedrive.v1";
+let msApp=null, msPret=null;
+function msConfigure(){ return !!(MS_CLIENT_ID&&MS_TENANT); }
+function chargerScript(src){ return new Promise((ok,ko)=>{ const e=document.createElement("script"); e.src=src; e.onload=ok; e.onerror=()=>ko(new Error("Impossible de charger la connexion Microsoft")); document.head.append(e); }); }
+function msInit(){
+  if(!msConfigure()) return Promise.resolve(null);
+  if(!msPret) msPret=(async()=>{
+    if(!window.msal) await chargerScript("https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js");
+    msApp=new msal.PublicClientApplication({auth:{clientId:MS_CLIENT_ID,authority:"https://login.microsoftonline.com/"+MS_TENANT,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+    await msApp.initialize();
+    const r=await msApp.handleRedirectPromise().catch(()=>null);
+    if(r&&r.account) msApp.setActiveAccount(r.account);
+    if(!msApp.getActiveAccount()&&msApp.getAllAccounts()[0]) msApp.setActiveAccount(msApp.getAllAccounts()[0]);
+    majMs();
+    return msApp;
+  })();
+  return msPret;
+}
+function msCompte(){ return msApp&&msApp.getActiveAccount(); }
+async function msConnecter(){
+  const app=await msInit(); if(!app) return null;
+  try{ const r=await app.loginPopup({scopes:MS_SCOPES,prompt:"select_account"}); app.setActiveAccount(r.account); majMs(); return r.account; }
+  catch(e){
+    if(/popup|block/i.test((e.errorCode||"")+e.message)){ await app.loginRedirect({scopes:MS_SCOPES}); return null; }
+    if(!/user_cancelled/i.test(e.errorCode||"")) toast("Connexion Microsoft impossible : "+(e.errorMessage||e.message));
+    return null;
+  }
+}
+async function msJeton(interactif){
+  const app=await msInit(); if(!app) return null;
+  const compte=app.getActiveAccount(); if(!compte) return null;
+  try{ return (await app.acquireTokenSilent({scopes:MS_SCOPES,account:compte})).accessToken; }
+  catch(e){
+    if(!interactif) return null;
+    try{ return (await app.acquireTokenPopup({scopes:MS_SCOPES,account:compte})).accessToken; }
+    catch(e2){ if(/popup|block/i.test((e2.errorCode||"")+e2.message)) await app.acquireTokenRedirect({scopes:MS_SCOPES,account:compte}); return null; }
+  }
+}
+async function majMs(){
+  const b=$("#blocMs"); if(!b) return;
+  b.hidden=!msConfigure(); if(b.hidden) return;
+  const c=msCompte();
+  $("#msEtat").textContent=c?"connecté ("+(c.username||c.name)+")":"non connecté";
+  $("#btnMs").textContent=c?"Changer de compte":"Se connecter à Microsoft";
+  const od=lire(CLE_OD,null);
+  $("#odEtat").textContent=od?"Dossier enregistré : « "+od.nom+" »":"Aucun dossier enregistré pour l'instant.";
+  if(od&&!$("#lienOd").value) $("#lienOd").value=od.lien||"";
+}
+// Lien de partage OneDrive -> identifiants du dossier (API Graph « shares »)
+async function enregistrerLienOd(){
+  const lien=$("#lienOd").value.trim();
+  if(!/^https:\/\/[^/]*(sharepoint\.com|onedrive\.live\.com|1drv\.ms)\//i.test(lien)){ toast("Collez le lien de partage du dossier OneDrive"); return; }
+  if(!msCompte()&&!await msConnecter()) return;
+  const jeton=await msJeton(true); if(!jeton) return;
+  const id="u!"+btoa(unescape(encodeURIComponent(lien))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
+  const rep=await fetch("https://graph.microsoft.com/v1.0/shares/"+id+"/driveItem?$select=id,name,folder,parentReference,webUrl",{headers:{Authorization:"Bearer "+jeton}});
+  const j=await rep.json().catch(()=>({}));
+  if(!rep.ok||!j.folder){ toast(rep.ok?"Ce lien ne pointe pas vers un dossier":"Dossier inaccessible : "+((j.error&&j.error.message)||rep.status)); return; }
+  ecrire(CLE_OD,{lien,driveId:j.parentReference.driveId,id:j.id,nom:j.name,webUrl:j.webUrl});
+  majMs(); toast("Dossier OneDrive enregistré");
+}
+
 let preparationEnCours=false;
 async function preparerDossier(m){
   if(preparationEnCours) return;
-  if(!FS_OK){ toast("Création du dossier : utilisez Chrome ou Edge sur PC"); return; }
+  const od=lire(CLE_OD,null);
+  if(msConfigure()&&od&&(msCompte()||!FS_OK)){ preparationEnCours=true; try{ await preparerEnLigne(m,od); }finally{ preparationEnCours=false; } return; }
+  if(!FS_OK){ toast(msConfigure()?"Connectez-vous à Microsoft dans l'onglet Mes marchés":"Création du dossier : utilisez Chrome ou Edge sur PC"); return; }
   preparationEnCours=true;
   const nom=nomDossier(m);
   const J=journal("Dossier de réponse");
@@ -1155,6 +1233,35 @@ async function preparerDossier(m){
   }catch(e){
     J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
   }finally{ preparationEnCours=false; }
+}
+
+async function preparerEnLigne(m,od){
+  const nom=nomDossier(m);
+  const J=journal("Dossier de réponse (OneDrive)");
+  let jeton=await msJeton(false);
+  if(!jeton){
+    const l=J.ligne("La connexion Microsoft doit être renouvelée.","ko");
+    l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true)) preparerDossier(m); }},"Se reconnecter"));
+    return;
+  }
+  let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
+  if(!atx) atx=atexoParRecherche(m);
+  const params={};
+  if(atx&&atx.dceAuto){ try{ new URL(atx.dceAuto).searchParams.forEach((v,k)=>{ if(k!=="quoi") params[k]=v; }); }catch(e){} }
+  const l=J.ligne("⏳ Création du dossier « "+nom+" »"+(params.origine?" et dépôt du DCE (1 à 3 minutes, vous pouvez continuer à naviguer)":"")+"…");
+  try{
+    const rep=await fetch(SERVEUR_DCE+"/onedrive",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+jeton},body:JSON.stringify({driveId:od.driveId,parentId:od.id,dossier:nom,...params})});
+    const r=await rep.json().catch(()=>({message:"Réponse illisible du serveur ("+rep.status+")"}));
+    if(r.webUrl){ l.textContent="✓ Dossier « "+nom+" » créé dans « "+od.nom+" » "; l.className="ok"; l.append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir dans OneDrive")); }
+    if(!rep.ok){ (r.webUrl?J.ligne(""):l).textContent="✗ "+(r.message||"Erreur "+rep.status); if(!r.webUrl) l.className="ko"; return; }
+    if(r.dce==="ok") J.ligne("✓ DCE dézippé : "+r.fichiers+" fichier"+(r.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(r.total>r.fichiers?" ("+(r.total-r.fichiers)+" en échec)":""),r.total>r.fichiers?"ko":"ok");
+    else{
+      const lien=r.lienDce||(atx&&atx.dce)||m.urlDocs||m.urlDepot||m.urlProfil||m.urlAvis;
+      const msg={absent:"Cette plateforme ne permet pas le retrait automatique du DCE.",introuvable:"La consultation n'a pas été retrouvée de façon certaine sur la plateforme.",echec:"Le DCE n'a pas pu être téléchargé : "+(r.message||""),trop_gros:"Le DCE dépasse 300 Mo, téléchargez-le à la main."}[r.dce]||"DCE non déposé.";
+      J.ligne(msg+" ","ko").append(el("a",{href:lien,target:"_blank",rel:"noopener"},"Télécharger le DCE sur la plateforme"));
+    }
+    (r.erreurs||[]).slice(0,5).forEach(e=>J.ligne("• "+e,"ko"));
+  }catch(e){ l.textContent="✗ Le serveur ne répond pas ("+e.message+"). Réessayez dans une minute avec le bouton 📁 Dossier de réponse."; l.className="ko"; }
 }
 
 function afficherListe(cont,items,vide){
@@ -1281,6 +1388,7 @@ let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
 function init(){
   majRacine();
+  if(msConfigure()){ msInit().catch(()=>{}); $("#btnMs").onclick=()=>msConnecter(); $("#btnLienOd").onclick=()=>enregistrerLienOd().catch(e=>toast(e.message)); majMs(); }
   const br=$("#btnRacine"); if(br) br.onclick=async()=>{ if(!FS_OK){ toast("Utilisez Chrome ou Edge sur PC"); return; } try{ await dossierRacine(true); toast("Dossier enregistré"); }catch(e){} };
   restaurerFiltres(); majSegments();
   // anciens choix enregistrés sans préfixe = regroupements métier
@@ -1419,7 +1527,8 @@ function initDecp(){
   $("#dRaz").onclick=()=>{ $("#formDecp").reset(); dEtat.metiers.length=0; dEtat.deps.length=0; dEtat.regions.length=0; dMsMetiers.rafraichir(); dMsDeps.rafraichir(); dMsRegions.rafraichir(); };
   document.querySelector('.onglet[data-vue="attribues"]').addEventListener("click",()=>{ if(!dLance){ dLance=true; rechercherDecp(0); } });
 }
-init();
+if(window.opener&&window.opener!==window&&/[#&?](code|error)=/.test(location.hash+location.search)){ document.body.innerHTML="<p style='font:16px system-ui;padding:24px'>Connexion en cours…</p>"; }
+else init();
 </script>
 </body>
 </html>

@@ -2,6 +2,13 @@
 "use strict";
 const zlib = require("zlib");
 
+// Noms de fichiers des ZIP sans drapeau UTF-8 : UTF-8 si valide, sinon page de code DOS 850 (archives Windows)
+const CP850 = "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´\u00ad±‗¾¶§÷¸°¨·¹³²■\u00a0";
+function decodeNomZip(b) {
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(b); } catch (e) {}
+  let r = ""; for (const c of b) r += c < 128 ? String.fromCharCode(c) : CP850[c - 128]; return r;
+}
+
 /* ---------- lecture des archives ZIP (DCE, .docx, .odt) sans dépendance ---------- */
 function lireZip(buf) {
   let fin = -1;
@@ -17,7 +24,7 @@ function lireZip(buf) {
     const local = buf.readUInt32LE(p + 42);
     const nomBrut = buf.subarray(p + 46, p + 46 + ln);
     const utf8 = buf.readUInt16LE(p + 8) & 0x800;
-    const nom = utf8 ? nomBrut.toString("utf8") : nomBrut.toString("latin1");
+    const nom = utf8 ? nomBrut.toString("utf8") : decodeNomZip(nomBrut);
     r.push({
       nom, taille: tailleReelle,
       lire: () => {
