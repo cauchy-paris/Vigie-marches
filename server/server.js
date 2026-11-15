@@ -123,6 +123,48 @@ async function telechargerDce(origine, id, org) {
   return rep;
 }
 
+/* ---------- retrouver une consultation par sa référence ---------- */
+const norm = t => (t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+async function chercher(origine, motCle) {
+  const jar = new Map();
+  const url = origine + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(motCle);
+  const { rep } = await requete(url, jar);
+  const html = await rep.text();
+  const liens = [];
+  const re = /(?:app\.php\/)?entreprise\/consultation\/(\d+)\?orgAcronyme=([a-z0-9]+)/gi;
+  let m;
+  while ((m = re.exec(html))) liens.push({ id: m[1], org: m[2], pos: m.index });
+  // texte autour de chaque lien, pour retrouver la référence et l'intitulé
+  return liens.map((l, i) => {
+    const debut = i > 0 ? liens[i - 1].pos : Math.max(0, l.pos - 6000);
+    return { id: l.id, org: l.org, texte: norm(html.slice(debut, l.pos).replace(/<[^>]+>/g, " ")) };
+  });
+}
+async function trouverConsultation(origine, ref, objet) {
+  const vus = new Map();
+  if (ref) {
+    const r = await chercher(origine, ref);
+    const nref = norm(ref);
+    const exacts = r.filter(x => new RegExp("(^|[^a-z0-9])" + nref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)").test(x.texte));
+    const ids = [...new Set(exacts.map(x => x.id))];
+    if (ids.length === 1) return exacts.find(x => x.id === ids[0]);
+    r.forEach(x => vus.set(x.id, x));
+    const tous = [...new Set(r.map(x => x.id))];
+    if (!exacts.length && tous.length === 1) return r[0];
+  }
+  if (objet) {
+    const mots = norm(objet).split(/[^a-z0-9]+/).filter(w => w.length > 3).slice(0, 8);
+    if (mots.length >= 2) {
+      const r = await chercher(origine, mots.join(" "));
+      // garder les consultations dont l'intitulé contient presque tous les mots
+      const bons = r.filter(x => mots.filter(w => x.texte.includes(w)).length >= Math.ceil(mots.length * 0.8));
+      const ids = [...new Set(bons.map(x => x.id))];
+      if (ids.length === 1) return bons.find(x => x.id === ids[0]);
+    }
+  }
+  return null;
+}
+
 /* ---------- serveur HTTP ---------- */
 const derniers = new Map(); // limitation simple : 20 demandes / 10 min / adresse IP
 function tropDeDemandes(ip) {
@@ -130,13 +172,13 @@ function tropDeDemandes(ip) {
   l.push(t); derniers.set(ip, l);
   return l.length > 20;
 }
-function pageErreur(res, code, message, retour) {
+function pageErreur(res, code, message, retour, libelle) {
   res.writeHead(code, { "Content-Type": "text/html; charset=utf-8" });
   res.end(`<!doctype html><meta charset="utf-8"><title>DCE indisponible</title>
 <body style="font:16px system-ui;max-width:640px;margin:40px auto;padding:0 16px;color:#14203d">
 <h1 style="color:#16337a;font-size:22px">Le DCE n'a pas pu être téléchargé automatiquement</h1>
 <p>${message.replace(/</g, "&lt;")}</p>
-${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline-block;background:#16337a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Ouvrir la page de retrait sur la plateforme</a></p>` : ""}
+${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline-block;background:#16337a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">${libelle || "Ouvrir la page de retrait sur la plateforme"}</a></p>` : ""}
 </body>`);
 }
 
@@ -145,10 +187,12 @@ http.createServer(async (req, res) => {
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
   if (u.pathname === "/diagnostic") {
     TRACE = [];
-    const o = u.searchParams.get("origine") || "", id = u.searchParams.get("id") || "", org = u.searchParams.get("org") || "";
+    const o = u.searchParams.get("origine") || "";
+    let id = u.searchParams.get("id") || "", org = u.searchParams.get("org") || "";
     let resultat;
     try {
       const h = new URL(o).hostname;
+      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("ref") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
       if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
       const r = await telechargerDce(new URL(o).origin, id, org);
       resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
@@ -161,18 +205,35 @@ http.createServer(async (req, res) => {
   if (u.pathname !== "/dce") { res.writeHead(404); return res.end("Introuvable"); }
 
   const origine = u.searchParams.get("origine") || "";
-  const id = u.searchParams.get("id") || "";
-  const org = u.searchParams.get("org") || "";
+  let id = u.searchParams.get("id") || "";
+  let org = u.searchParams.get("org") || "";
+  const ref = (u.searchParams.get("ref") || "").slice(0, 80);
+  const objet = (u.searchParams.get("objet") || "").slice(0, 300);
+  const quoi = u.searchParams.get("quoi") || "dce"; // dce | rc | consultation
   let hote;
   try { const o = new URL(origine); if (o.protocol !== "https:" && !process.env.HOTE_TEST) throw 0; hote = o.hostname; } catch (e) { return pageErreur(res, 400, "Adresse de plateforme invalide."); }
   const retour = origine + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + encodeURIComponent(id) + "&orgAcronyme=" + encodeURIComponent(org);
   if (!hoteAutorise(hote)) return pageErreur(res, 400, "Cette plateforme n'est pas prise en charge pour le téléchargement automatique.", retour);
-  if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) return pageErreur(res, 400, "Identifiant de consultation invalide.", retour);
   const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
   if (tropDeDemandes(ip)) return pageErreur(res, 429, "Trop de téléchargements en peu de temps. Réessayez dans quelques minutes.", retour);
+  const base = new URL(origine).origin;
+  if (!id && (ref || objet)) {
+    try {
+      const t = await trouverConsultation(base, ref, objet);
+      if (t) { id = t.id; org = t.org; console.log(new Date().toISOString(), "TROUVE", hote, ref, "->", id, org); }
+    } catch (e) { console.log("recherche", e.message); }
+    if (!id) {
+      const rech = base + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(ref || objet);
+      return pageErreur(res, 404, "La consultation n'a pas été retrouvée automatiquement sur la plateforme" + (ref ? " (référence " + ref + ")" : "") + ".", rech, "Voir la recherche sur la plateforme");
+    }
+  }
+  if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) return pageErreur(res, 400, "Identifiant de consultation invalide.", retour);
+  const page = base + "/index.php?page=Entreprise.";
+  if (quoi === "rc") { res.writeHead(302, { Location: page + "EntrepriseDownloadReglement&id=" + encodeURIComponent(Buffer.from(id).toString("base64")) + "&orgAcronyme=" + org }); return res.end(); }
+  if (quoi === "consultation") { res.writeHead(302, { Location: base + "/entreprise/consultation/" + id + "?orgAcronyme=" + org }); return res.end(); }
 
   try {
-    const rep = await telechargerDce(new URL(origine).origin, id, org);
+    const rep = await telechargerDce(base, id, org);
     const cd = rep.headers.get("content-disposition") || `attachment; filename="DCE_${id}.zip"`;
     res.writeHead(200, {
       "Content-Type": rep.headers.get("content-type") || "application/zip",
@@ -186,7 +247,7 @@ http.createServer(async (req, res) => {
     console.log(new Date().toISOString(), "DCE OK", hote, id, org);
   } catch (e) {
     console.log(new Date().toISOString(), "DCE ECHEC", hote, id, org, e.message);
-    if (!res.headersSent) pageErreur(res, 502, e.message + ". Vous pouvez le récupérer manuellement sur la plateforme (choisir « anonyme »).", retour);
+    if (!res.headersSent) pageErreur(res, 502, e.message + ". Vous pouvez le récupérer manuellement sur la plateforme (choisir « anonyme »).", page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org);
     else res.end();
   }
 }).listen(PORT, () => console.log("Serveur DCE sur le port " + PORT));
