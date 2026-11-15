@@ -135,9 +135,16 @@ async function chercher(origine, motCle) {
   let m;
   while ((m = re.exec(html))) liens.push({ id: m[1], org: m[2], pos: m.index });
   // texte autour de chaque lien, pour retrouver la référence et l'intitulé
-  const r = liens.map((l, i) => {
-    const debut = i > 0 ? liens[i - 1].pos : Math.max(0, l.pos - 6000);
-    return { id: l.id, org: l.org, texte: norm(html.slice(debut, l.pos).replace(/<[^>]+>/g, " ")) };
+  // un bloc par consultation : de la dernière occurrence de la consultation précédente
+  // jusqu'à la dernière occurrence de celle-ci (titre, référence et date limite s'y trouvent
+  // quelle que soit la mise en page de la plateforme)
+  const ordre = [], dernier = new Map();
+  for (const l of liens) { if (!dernier.has(l.id)) ordre.push(l); dernier.set(l.id, l.pos); }
+  const r = ordre.map((l, i) => {
+    const debut = i > 0 ? dernier.get(ordre[i - 1].id) : Math.max(0, l.pos - 6000);
+    let fin = dernier.get(l.id);
+    if (fin === l.pos) fin = Math.min(html.length, l.pos + (i + 1 < ordre.length ? Math.min(3000, ordre[i + 1].pos - l.pos) : 3000));
+    return { id: l.id, org: l.org, texte: norm(html.slice(debut, fin).replace(/<[^>]+>/g, " ")) };
   });
   if (TRACE) TRACE.push({ recherche: motCle, statut: rep.status, nb: (html.match(/Nombre de r[ée]sultats[^0-9]{0,40}(\d+)/i) || [])[1], liens: r.slice(0, 40).map(x => x.id + " | " + x.texte.slice(-160)) });
   return r;
