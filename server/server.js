@@ -36,6 +36,7 @@ function majCookies(jar, rep) {
 }
 const enTete = jar => [...jar].map(([k, v]) => k + "=" + v).join("; ");
 
+let TRACE = null;
 async function requete(url, jar, opts = {}) {
   let cible = url;
   for (let i = 0; i < 6; i++) {
@@ -46,6 +47,7 @@ async function requete(url, jar, opts = {}) {
       signal: AbortSignal.timeout(120000),
     });
     majCookies(jar, rep);
+    if (TRACE) TRACE.push({ methode: opts.method || "GET", url: cible, statut: rep.status, location: rep.headers.get("location"), type: rep.headers.get("content-type"), cookies: [...jar.keys()] });
     if (rep.status >= 300 && rep.status < 400 && rep.headers.get("location")) {
       cible = new URL(rep.headers.get("location"), cible).toString();
       opts = { method: "GET" };
@@ -84,6 +86,7 @@ async function telechargerDce(origine, id, org) {
   // 1. page de demande
   let { rep, url } = await requete(urlDemande, jar);
   let html = await rep.text();
+  if (TRACE) TRACE.push({ etape: 1, titre: (html.match(/<title>([^<]*)/i) || [])[1], champs: champs(html).filter(c => c.type !== "hidden" || /PRADO/.test(c.name || "")).map(c => [c.type, c.name, c.id, (c.value || "").slice(0, 80)]).slice(0, 60) });
   if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Page de retrait du DCE introuvable");
 
   // 2. choix « anonyme » + acceptation des conditions, puis validation
@@ -97,6 +100,7 @@ async function telechargerDce(origine, id, org) {
   d.set("PRADO_POSTBACK_TARGET", valider ? (valider.name || versNom(valider.id)) : "ctl0$CONTENU_PAGE$validateButton");
   ({ rep, url } = await requete(url, jar, { method: "POST", body: d, headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
   html = await rep.text();
+  if (TRACE) TRACE.push({ etape: 2, envoye: [...d.keys()].filter(k => !/PAGESTATE/.test(k)).map(k => [k, d.get(k).slice(0, 80)]), titre: (html.match(/<title>([^<]*)/i) || [])[1], erreurs: (html.match(/class="[^"]*(erreur|error|alert)[^"]*"[^>]*>[\s\S]{0,300}/gi) || []).slice(0, 5).map(x => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200)), liens: [...html.matchAll(/(?:id|href)="([^"]*(?:ownload|Dce|DCE)[^"]*)"/g)].map(m => m[1]).slice(0, 20) });
   if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Étape « anonyme » refusée par la plateforme");
 
   // 3. demande du DCE complet
@@ -131,6 +135,21 @@ ${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  if (u.pathname === "/diagnostic") {
+    TRACE = [];
+    const o = u.searchParams.get("origine") || "", id = u.searchParams.get("id") || "", org = u.searchParams.get("org") || "";
+    let resultat;
+    try {
+      const h = new URL(o).hostname;
+      if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
+      const r = await telechargerDce(new URL(o).origin, id, org);
+      resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
+      try { await r.body.cancel(); } catch (e) {}
+    } catch (e) { resultat = { ok: false, erreur: e.message }; }
+    const t = TRACE; TRACE = null;
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end(JSON.stringify({ resultat, trace: t }, null, 1));
+  }
   if (u.pathname !== "/dce") { res.writeHead(404); return res.end("Introuvable"); }
 
   const origine = u.searchParams.get("origine") || "";
