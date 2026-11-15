@@ -217,6 +217,7 @@ http.createServer(async (req, res) => {
       const h = new URL(o).hostname;
       if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
       if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
+      if (u.searchParams.get("sansdce")) throw new Error("arrêt avant le DCE (sansdce)");
       const r = await telechargerDce(new URL(o).origin, id, org);
       resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
       try { await r.body.cancel(); } catch (e) {}
