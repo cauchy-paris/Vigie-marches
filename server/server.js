@@ -164,8 +164,13 @@ async function trouverConsultation(origine, ref, objet, limite) {
   if (!mots.length) return null;
   const date = motifDate(limite);
   // recherches : tous les mots, puis en retirant un mot à la fois (l'intitulé BOAMP diffère souvent un peu)
-  const essais = [mots];
-  if (mots.length > 1) for (let k = mots.length - 1; k >= 0 && essais.length < 7; k--) essais.push(mots.filter((_, i) => i !== k));
+  // La recherche PLACE marche mieux avec des mots isolés ou des paires : on en lance plusieurs en parallèle,
+  // puis on départage avec la date limite et la proportion de mots de l'intitulé retrouvés.
+  const essais = [];
+  const ajoute = e => { const k = e.join(" "); if (!essais.some(x => x.join(" ") === k)) essais.push(e); };
+  for (let i = 0; i + 1 < mots.length && essais.length < 3; i++) ajoute([mots[i], mots[i + 1]]);
+  [...mots].sort((a, b) => b.length - a.length).forEach(w => { if (essais.length < 9) ajoute([w]); });
+  ajoute(mots);
   const candidats = new Map();
   const resultats = await Promise.all(essais.map(e => chercher(origine, e.join(" ")).catch(() => [])));
   for (const r of resultats) {
