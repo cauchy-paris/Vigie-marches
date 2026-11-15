@@ -163,7 +163,9 @@ function motifDate(limite) {
   if (!m) return null;
   return new RegExp("(^|\\D)0?" + Number(m[3]) + "\\s*(" + MOIS[Number(m[2]) - 1] + "[a-z.]*|/" + m[2] + "/)\\s*" + m[1]);
 }
-async function trouverConsultation(origine, ref, objet, limite) {
+async function trouverConsultation(origine, ref, objet, limite, acheteur) {
+  // mots distinctifs de l'acheteur (« Sénat », « Louvre »…) pour départager des consultations proches
+  const motsAch = [...new Set(norm(acheteur || "").split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !/^(ville|commune|mairie|departement|region|conseil|direction|service|services|public|publique|etablissement|ministere|general|centre|national|nationale|france|paris|syndicat|office|agence)$/.test(w)))];
   if (ref && !REF_VIDE.test(norm(ref))) {
     const r = await chercher(origine, ref);
     const nref = norm(ref);
@@ -192,9 +194,10 @@ async function trouverConsultation(origine, ref, objet, limite) {
     for (const x of r) {
       const ratio = mots.filter(w => x.texte.includes(w)).length / mots.length;
       const okDate = date ? date.test(x.texte) : false;
-      const score = ratio + (okDate ? 1 : 0);
+      const okAch = motsAch.length > 0 && motsAch.some(w => x.texte.includes(w));
+      const score = ratio + (okDate ? 1 : 0) + (okAch ? 0.5 : 0);
       const prec = candidats.get(x.id);
-      if (!prec || prec.score < score) candidats.set(x.id, { ...x, score, ratio, okDate });
+      if (!prec || prec.score < score) candidats.set(x.id, { ...x, score, ratio, okDate, okAch });
     }
   }
   {
@@ -204,7 +207,7 @@ async function trouverConsultation(origine, ref, objet, limite) {
     if (meilleur && net && ((meilleur.okDate && meilleur.ratio >= 0.5) || (!date && meilleur.ratio >= 0.85))) return meilleur;
   }
   const tri = [...candidats.values()].sort((a, b) => b.score - a.score);
-  if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate) }, { extrait: tri[0] ? tri[0].texte.slice(0, 600) : "" });
+  if (TRACE) TRACE.push({ candidats: tri.slice(0, 5).map(x => x.id + " score=" + x.score.toFixed(2) + " date=" + x.okDate + " ach=" + x.okAch) }, { extrait: tri[0] ? tri[0].texte.slice(0, 600) : "" });
   if (tri[0] && tri[0].okDate && tri[0].ratio >= 0.5 && (!tri[1] || tri[1].score < tri[0].score)) return tri[0];
   // une seule consultation trouvée avec la même date limite que l'avis : c'est elle
   const memeDate = tri.filter(x => x.okDate);
@@ -281,7 +284,7 @@ async function routeAnalyse(req, res, u) {
       if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw new Error("plateforme non prise en charge");
       let id = u.searchParams.get("id") || "", org = u.searchParams.get("org") || "";
       if (!id) {
-        const t = await trouverConsultation(base.origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25));
+        const t = await trouverConsultation(base.origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25), (u.searchParams.get("acheteur") || "").slice(0, 120));
         if (t) { id = t.id; org = t.org; }
       }
       if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("consultation non retrouvée sur la plateforme");
@@ -347,7 +350,7 @@ async function routeOneDrive(req, res, u) {
     let base;
     try { base = new URL(origine); if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw 0; } catch (e) { r.dce = "absent"; return json(res, 200, r, autorise); }
     let id = String(c.id || ""), org = String(c.org || "");
-    if (!id) { const t = await trouverConsultation(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300), String(c.limite || "").slice(0, 25)).catch(() => null); if (t) { id = t.id; org = t.org; } }
+    if (!id) { const t = await trouverConsultation(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300), String(c.limite || "").slice(0, 25), String(c.acheteur || "").slice(0, 120)).catch(() => null); if (t) { id = t.id; org = t.org; } }
     if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; return json(res, 200, r, autorise); }
     let rep;
     try { rep = await telechargerDce(base.origin, id, org); } catch (e) { r.dce = "echec"; r.message = e.message; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
@@ -401,7 +404,7 @@ http.createServer(async (req, res) => {
     let resultat;
     try {
       const h = new URL(o).hostname;
-      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
+      if (!id && hoteAutorise(h)) { const t = await trouverConsultation(new URL(o).origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25), (u.searchParams.get("acheteur") || "").slice(0, 120)); TRACE.push({ trouve: t && { id: t.id, org: t.org } }); if (t) { id = t.id; org = t.org; } }
       if (!hoteAutorise(h) || !/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("paramètres refusés");
       if (u.searchParams.get("sansdce")) throw new Error("arrêt avant le DCE (sansdce)");
       const r = await telechargerDce(new URL(o).origin, id, org);
@@ -441,7 +444,7 @@ http.createServer(async (req, res) => {
   const base = new URL(origine).origin;
   if (!id && (ref || objet)) {
     try {
-      const t = await trouverConsultation(base, ref, objet, limite);
+      const t = await trouverConsultation(base, ref, objet, limite, (u.searchParams.get("acheteur") || "").slice(0, 120));
       if (t) { id = t.id; org = t.org; console.log(new Date().toISOString(), "TROUVE", hote, ref, "->", id, org); }
     } catch (e) { console.log("recherche", e.message); }
     if (!id) {

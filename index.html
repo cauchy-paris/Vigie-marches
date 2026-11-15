@@ -546,7 +546,7 @@ function atexoParRecherche(m){
     if(!HOTES_ATEXO.test(x.hostname)) continue;
     const refs=[m.refDocs,m.refAcheteur].filter(r=>r&&r.length>=3&&r.length<=60&&!/^(LOT|ORG|PAR|RES|TPO)-\d+$/i.test(r)&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(r)&&!/^(sans objet|n[ée]ant|n\/?a|non communiqu[ée])$/i.test(r.trim()));
     let lim=""; try{ if(m.limite) lim=new Date(m.limite).toLocaleDateString("sv-SE",{timeZone:"Europe/Paris"}); }catch(e){}
-    const q="origine="+encodeURIComponent(x.origin)+(refs[0]?"&reference="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200))+(lim?"&limite="+lim:"");
+    const q="origine="+encodeURIComponent(x.origin)+(refs[0]?"&reference="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200))+(lim?"&limite="+lim:"")+(m.acheteur?"&acheteur="+encodeURIComponent(m.acheteur.slice(0,120)):"");
     return {rc:SERVEUR_DCE+"/dce?quoi=rc&"+q, dceAuto:SERVEUR_DCE+"/dce?"+q, consultation:SERVEUR_DCE+"/dce?quoi=consultation&"+q, recherche:true};
   }
   return null;
