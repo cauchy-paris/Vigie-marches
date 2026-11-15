@@ -133,7 +133,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .lots{margin:0;padding-left:18px;font-size:13px}
 .cpv{display:flex;flex-wrap:wrap;gap:5px;align-items:center;font-size:12px}
 .cpv code{font-family:var(--f-mono);background:var(--fond);border:1px solid var(--trait);border-radius:4px;padding:1px 6px}
-.cpv .metier{background:var(--vert-clair);color:var(--vert);border-radius:4px;padding:1px 7px;font-weight:600}
+.metier{display:inline-block;font-size:12.5px;background:var(--vert-clair);color:var(--vert);border-radius:4px;padding:1px 7px;font-weight:600}
 .pied{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .docs{display:flex;gap:8px;flex-wrap:wrap}
 .statuts{display:flex;gap:6px;flex-wrap:wrap}
@@ -143,6 +143,34 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .statut[aria-pressed="true"][data-s="reflexion"]{background:var(--ambre-clair);border-color:var(--ambre);color:var(--ambre)}
 .statut[aria-pressed="true"][data-s="reponse"]{background:var(--rouge);border-color:var(--rouge);color:var(--blanc)}
 .note-docs{font-size:12px;color:var(--gris);margin:0}
+.infos .large{grid-column:1/-1}
+.infos dd .metier{margin:2px 4px 2px 0}
+.plus-ia{display:flex;align-items:center;gap:8px;width:100%;border:1.5px dashed var(--bleu-moyen);background:var(--bleu-clair);color:var(--bleu);border-radius:8px;padding:9px 12px;font-weight:700;font-size:13.5px;cursor:pointer;text-align:left}
+.plus-ia:hover{border-style:solid}
+.plus-ia .fleche{display:inline-block;transition:transform .15s}
+.plus-ia[aria-expanded="true"] .fleche{transform:rotate(180deg)}
+.ia{border:1.5px solid var(--bleu-clair);border-radius:10px;padding:14px;display:grid;gap:12px;background:var(--blanc)}
+.ia-attente{display:flex;gap:12px;align-items:center;font-size:13.5px;color:var(--bleu-fonce)}
+.ia-attente .rond{width:22px;height:22px;flex:none;border:3px solid var(--bleu-clair);border-top-color:var(--rouge);border-radius:50%;animation:tourne 1s linear infinite}
+@keyframes tourne{to{transform:rotate(360deg)}}
+.ia-erreur{background:var(--rouge-clair);border-left:4px solid var(--rouge);padding:10px 12px;border-radius:6px;font-size:13.5px}
+.ia-erreur p{margin:0 0 8px}
+.ia-synthese{margin:0;background:var(--bleu-clair);border-left:4px solid var(--bleu);padding:10px 12px;border-radius:6px;font-size:14px;line-height:1.5}
+.ia-fiche{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px 16px;margin:0}
+.ia-fiche dt{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gris)}
+.ia-fiche dd{margin:2px 0 0;font-size:13.5px}
+.ia-fiche .montant dd{font-weight:700;color:var(--bleu)}
+.ia-bloc h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--rouge)}
+.ia-bloc ul{margin:0;padding-left:18px;font-size:13.5px}
+.ia-bloc ul.sous{font-size:12.5px;color:var(--gris);margin-top:2px}
+.ia-bloc ul.attention li::marker{content:"⚠ "}
+.ia-criteres{width:100%;border-collapse:collapse;font-size:13.5px}
+.ia-criteres td{border-top:1px solid var(--trait);padding:6px 4px;vertical-align:top}
+.ia-criteres td.poids{text-align:right;font-weight:700;color:var(--bleu);white-space:nowrap;width:1%}
+.ia-qualifs{display:flex;flex-wrap:wrap;gap:6px}
+.ia-qualifs span{border:1.5px solid var(--rouge);color:var(--rouge);background:var(--rouge-clair);border-radius:999px;padding:2px 10px;font-size:12.5px;font-weight:600}
+.lot-mt{color:var(--gris)}
+.ia-source{margin:0;font-size:12px;color:var(--gris)}
 .ref{font-family:var(--f-mono);font-size:12px;color:var(--gris)}
 
 .pagination{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
@@ -676,6 +704,7 @@ function normaliser(r){
     types:liste(r.type_marche), deps:liste(r.code_departement), descripteurs:liste(r.descripteur_libelle),
     procedure:r.procedure_libelle||"", famille:r.famille_libelle||"", nature:r.nature_libelle||"",
     urlAvis:r.url_avis||("https://www.boamp.fr/pages/avis/?q=idweb:"+r.idweb),
+    brut:r.donnees||null,
     ...a
   };
 }
@@ -830,6 +859,8 @@ function carte(m){
   ajout("Lots",m.lots.length?m.lots.length+" lots":"");
   ajout("Publié le",fmtDate(m.parution));
   ajout("Prestations",m.descripteurs.join(", "));
+  const ce=corpsEtat(m);
+  if(ce.length) infos.append(el("div",{class:"large"},el("dt",{text:"Corps d'état"}),el("dd",{},ce.map(x=>el("span",{class:"metier",text:x})))));
   c.append(infos);
 
   // Résumé
@@ -847,8 +878,7 @@ function carte(m){
     c.append(det);
   }
   if(m.cpv.length){
-    const met=metiersCpv(m.cpv);
-    c.append(el("div",{class:"cpv"},el("span",{text:"CPV :"}),m.cpv.slice(0,6).map(x=>el("code",{text:x})),m.cpv.length>6?el("span",{text:"+"+(m.cpv.length-6)}):null,met.map(x=>el("span",{class:"metier",text:x}))));
+    c.append(el("div",{class:"cpv"},el("span",{text:"CPV :"}),m.cpv.slice(0,6).map(x=>el("code",{text:x})),m.cpv.length>6?el("span",{text:"+"+(m.cpv.length-6)}):null));
   }
 
   // Boutons RC / DCE / statuts
@@ -871,6 +901,14 @@ function carte(m){
     sts.append(b);
   }
   c.append(el("div",{class:"pied"},docs,sts));
+  const panneau=el("div",{class:"ia",hidden:true});
+  const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du RC par l'IA");
+  bIA.onclick=()=>{
+    const ouvrir=panneau.hidden;
+    panneau.hidden=!ouvrir; bIA.setAttribute("aria-expanded",String(ouvrir));
+    if(ouvrir&&!panneau.dataset.charge) lancerAnalyse(m,atx,panneau,false);
+  };
+  c.append(bIA,panneau);
   const note = atx
     ? (plat?plat.nom:"Plateforme")+" · RC et DCE en téléchargement direct, sans compte. Le premier DCE de la journée peut mettre jusqu'à une minute à démarrer."
     : cible
@@ -878,6 +916,89 @@ function carte(m){
     : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";
   c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:"Avis n° "+m.idweb+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
   return c;
+}
+
+/* ---------- Corps d'état ---------- */
+const sansAccent=t=>(t||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+function corpsEtat(m){
+  const r=new Set(metiersCpv(m.cpv||[]));
+  const t=" "+sansAccent([m.objet,(m.lots||[]).join(" "),m.description].join(" "))+" ";
+  for(const x of METIERS) if(x.termes.some(w=>t.includes(sansAccent(w)))) r.add(x.nom.split(",")[0]);
+  return [...r].slice(0,10);
+}
+
+/* ---------- Analyse du RC par l'IA (serveur) ---------- */
+const CLE_ANALYSES="vigie.analyses.v1";
+function avisTexte(m){
+  const l=[];
+  const a=(k,v)=>{ if(v&&(!Array.isArray(v)||v.length)) l.push(k+" : "+(Array.isArray(v)?v.join(" ; "):v)); };
+  a("Objet",m.objet); a("Acheteur",m.acheteur); a("Type de marché",m.types); a("Procédure",m.procedure||m.famille);
+  a("Département",m.deps); a("Lieu d'exécution",m.lieu); a("Montant estimé",m.montant); a("Durée",m.duree);
+  a("Date limite",m.limite?fmtDate(m.limite,true):""); a("Prestations",m.descripteurs); a("CPV",m.cpv); a("Lots",m.lots);
+  a("Description",m.description);
+  if(m.brut){
+    let d; try{ d=typeof m.brut==="string"?JSON.parse(m.brut):m.brut; }catch(e){}
+    if(d){
+      const vus=new Set(), f=[];
+      parcourir(d,(k,v,ch)=>{ if(v==null||typeof v==="object") return; const t=String(v).trim(); if(t.length<2||/^https?:/.test(t)||vus.has(t)) return; vus.add(t); f.push((ch||k).replace(/\b(cac|cbc|efac|efbc|efext|ext):/g,"").slice(-90)+" = "+t.slice(0,1500)); });
+      l.push("\nDonnées détaillées de l'avis :\n"+f.join("\n"));
+    }
+  }
+  return l.join("\n").slice(0,45000);
+}
+async function lancerAnalyse(m,atx,panneau,forcer){
+  const cache=lire(CLE_ANALYSES,{});
+  if(!forcer&&cache[m.idweb]){ afficherAnalyse(m,atx,panneau,cache[m.idweb]); return; }
+  panneau.dataset.charge="1";
+  panneau.innerHTML="";
+  panneau.append(el("div",{class:"ia-attente"},el("span",{class:"rond"}),el("div",{},el("strong",{text:atx?"Téléchargement et lecture du règlement de consultation…":"Lecture de l'avis…"}),el("div",{text:"Cela prend en général 30 secondes à 2 minutes (un peu plus si le serveur était en veille)."}))));
+  let q="";
+  if(atx&&atx.dceAuto){ try{ q=new URL(atx.dceAuto).search.replace(/^\?/,""); }catch(e){} }
+  try{
+    const rep=await fetch(SERVEUR_DCE+"/analyse"+(q?"?"+q:""),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cle:forcer?"":m.idweb,avis:avisTexte(m)})});
+    const r=await rep.json().catch(()=>({message:"Réponse illisible du serveur ("+rep.status+")"}));
+    if(!rep.ok||!r.ok) throw Object.assign(new Error(r.message||"Erreur "+rep.status),{code:r.erreur});
+    const c2=lire(CLE_ANALYSES,{}); c2[m.idweb]=r;
+    const cles=Object.keys(c2); if(cles.length>150) cles.slice(0,cles.length-150).forEach(k=>delete c2[k]);
+    ecrire(CLE_ANALYSES,c2);
+    afficherAnalyse(m,atx,panneau,r);
+  }catch(e){
+    delete panneau.dataset.charge;
+    panneau.innerHTML="";
+    const msg=e.code==="cle"?"L'analyse IA n'est pas encore activée : il faut ajouter la clé ANTHROPIC_API_KEY sur le service vigie-marches-dce dans Render (Environment)."
+      :e instanceof TypeError?"Le serveur d'analyse ne répond pas. Réessayez dans une minute (il se réveille après une période d'inactivité).":e.message;
+    panneau.append(el("div",{class:"ia-erreur"},el("p",{text:msg}),el("button",{class:"btn",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,false)},"Réessayer")));
+  }
+}
+function afficherAnalyse(m,atx,panneau,r){
+  panneau.dataset.charge="1";
+  const s=r.synthese||{};
+  panneau.innerHTML="";
+  const bloc=(titre,...contenu)=>el("section",{class:"ia-bloc"},el("h4",{text:titre}),...contenu);
+  const ul=(l,cls)=>el("ul",{class:cls||""},l.map(x=>el("li",{text:x})));
+  if(s.synthese) panneau.append(el("p",{class:"ia-synthese",text:s.synthese}));
+  const fiche=el("dl",{class:"ia-fiche"});
+  const f=(lib,v,cls)=>{ if(v) fiche.append(el("div",{class:cls||""},el("dt",{text:lib}),el("dd",{text:v}))); };
+  f("Type de marché",s.type_marche); f("Procédure",s.procedure);
+  f("Montant minimum",s.montant_min,"montant"); f("Montant maximum",s.montant_max,"montant"); f("Montant estimé",s.montant_estime,"montant");
+  f("Durée / délais",s.duree); f("Visite",s.visite); f("Date limite",s.date_limite);
+  if(fiche.children.length) panneau.append(fiche);
+  if((s.criteres||[]).length){
+    panneau.append(bloc("Critères de notation",el("table",{class:"ia-criteres"},el("tbody",{},s.criteres.map(c=>el("tr",{},
+      el("td",{},el("strong",{text:c.critere}),(c.sous_criteres||[]).length?ul(c.sous_criteres,"sous"):null),
+      el("td",{class:"poids",text:c.ponderation||"–"})))))));
+  }
+  if((s.qualifications||[]).length) panneau.append(bloc("Qualifications demandées",el("div",{class:"ia-qualifs"},s.qualifications.map(x=>el("span",{text:x})))));
+  if((s.capacites||[]).length) panneau.append(bloc("Autres conditions de participation",ul(s.capacites)));
+  if((s.attendus||[]).length) panneau.append(bloc("Ce qui est attendu",ul(s.attendus)));
+  const lots=(s.lots||[]).filter(l=>l.intitule);
+  if(lots.length) panneau.append(bloc("Lots",el("ol",{class:"lots"},lots.map(l=>el("li",{},(l.numero?l.numero+" · ":"")+l.intitule,l.montant?el("span",{class:"lot-mt",text:" · "+l.montant}):null)))));
+  if((s.corps_etat||[]).length) panneau.append(bloc("Corps d'état",el("div",{},s.corps_etat.map(x=>el("span",{class:"metier",text:x})))));
+  if((s.points_attention||[]).length) panneau.append(bloc("Points d'attention",ul(s.points_attention,"attention")));
+  const src=r.source==="rc"?"Analyse du règlement de consultation"+(r.fichier?" « "+r.fichier+" »":""):"Analyse faite sur l'avis BOAMP seul"+(r.raisonSansRc?" (RC non récupéré : "+r.raisonSansRc+")":"")+". Vérifiez dans le RC.";
+  let quand=""; try{ quand=" · "+new Date(r.date).toLocaleDateString("fr-FR"); }catch(e){}
+  panneau.append(el("p",{class:"ia-source"},"🤖 "+src+quand+". Synthèse générée par IA, à vérifier avant de répondre.  ",
+    el("button",{class:"lien-plus",type:"button",onclick:()=>lancerAnalyse(m,atx,panneau,true)},"Relancer l'analyse")));
 }
 
 function afficherListe(cont,items,vide){

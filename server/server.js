@@ -3,6 +3,7 @@
 // « téléchargement anonyme », puis renvoie le fichier au navigateur.
 "use strict";
 const http = require("http");
+const { extraire, analyser } = require("./analyse");
 
 const PORT = process.env.PORT || 10000;
 const UA = "Mozilla/5.0 (compatible; VigieMarches/1.0; veille marches publics)";
@@ -212,6 +213,95 @@ async function trouverConsultation(origine, ref, objet, limite) {
 process.on("uncaughtException", e => console.log("Erreur non gérée", e && e.stack));
 process.on("unhandledRejection", e => console.log("Promesse rejetée", e && e.stack));
 
+
+/* ---------- analyse du RC par l'IA ---------- */
+const ORIGINES = new Set(["https://vigie-marches.onrender.com", "null", ...(process.env.ORIGINES_TEST || "").split(",").filter(Boolean)]);
+const analyses = new Map(); // cache : clé -> réponse
+const compteAnalyses = new Map(); let jourAnalyses = "", totalJour = 0;
+function quotaAnalyse(ip) {
+  const j = new Date().toISOString().slice(0, 10);
+  if (j !== jourAnalyses) { jourAnalyses = j; totalJour = 0; compteAnalyses.clear(); }
+  const n = (compteAnalyses.get(ip) || 0) + 1;
+  if (n > Number(process.env.ANALYSES_PAR_JOUR || 60) || totalJour >= Number(process.env.ANALYSES_MAX_JOUR || 300)) return false;
+  compteAnalyses.set(ip, n); totalJour++;
+  return true;
+}
+function json(res, code, obj, origine) {
+  res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...(origine ? { "Access-Control-Allow-Origin": origine, Vary: "Origin" } : {}) });
+  res.end(JSON.stringify(obj));
+}
+async function lireCorps(req, max) {
+  const morceaux = []; let n = 0;
+  for await (const c of req) { n += c.length; if (n > max) throw new Error("trop gros"); morceaux.push(c); }
+  return Buffer.concat(morceaux).toString("utf8");
+}
+async function telechargerRc(base, id, org) {
+  const jar = new Map();
+  const url = base + "/index.php?page=Entreprise.EntrepriseDownloadReglement&id=" + encodeURIComponent(Buffer.from(id).toString("base64")) + "&orgAcronyme=" + encodeURIComponent(org);
+  const { rep } = await requete(url, jar);
+  if (!rep.ok) throw new Error("RC indisponible (" + rep.status + ")");
+  const taille = Number(rep.headers.get("content-length") || 0);
+  if (taille > 40e6) throw new Error("RC trop volumineux");
+  const buf = Buffer.from(await rep.arrayBuffer());
+  const cd = rep.headers.get("content-disposition") || "";
+  const nom = decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i) || [])[1] || "") || (cd.match(/filename="?([^";]+)/i) || [])[1] || "RC";
+  return { buf, nom, url };
+}
+async function routeAnalyse(req, res, u) {
+  const o = req.headers.origin;
+  const autorise = o && ORIGINES.has(o) ? o : null;
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, autorise ? { "Access-Control-Allow-Origin": autorise, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {});
+    return res.end();
+  }
+  if (req.method !== "POST") return json(res, 405, { erreur: "POST attendu" }, autorise);
+  if (!autorise) return json(res, 403, { erreur: "Origine non autorisée" });
+  let corps;
+  try { corps = JSON.parse(await lireCorps(req, 400000)); } catch (e) { return json(res, 400, { erreur: "Demande illisible" }, autorise); }
+  const cle = String(corps.cle || "").slice(0, 40);
+  if (cle && analyses.has(cle)) return json(res, 200, analyses.get(cle), autorise);
+  if (!process.env.ANTHROPIC_API_KEY) return json(res, 503, { erreur: "cle", message: "L'analyse IA n'est pas encore activée : la clé ANTHROPIC_API_KEY n'est pas configurée sur le serveur." }, autorise);
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (!quotaAnalyse(ip)) return json(res, 429, { erreur: "quota", message: "Nombre maximum d'analyses atteint pour aujourd'hui." }, autorise);
+
+  // 1. récupérer le RC quand la consultation est sur une plateforme Atexo
+  let rc = null, fichier = "", lienRc = "", raisonSansRc = "";
+  const origine = u.searchParams.get("origine") || "";
+  try {
+    if (origine) {
+      const base = new URL(origine);
+      if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw new Error("plateforme non prise en charge");
+      let id = u.searchParams.get("id") || "", org = u.searchParams.get("org") || "";
+      if (!id) {
+        const t = await trouverConsultation(base.origin, (u.searchParams.get("reference") || "").slice(0, 80), (u.searchParams.get("objet") || "").slice(0, 300), (u.searchParams.get("limite") || "").slice(0, 25));
+        if (t) { id = t.id; org = t.org; }
+      }
+      if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("consultation non retrouvée sur la plateforme");
+      const r = await telechargerRc(base.origin, id, org);
+      lienRc = r.url;
+      rc = extraire(r.buf, r.nom);
+      if (!rc) throw new Error("RC non lisible (" + r.nom + ")");
+      fichier = rc.nom;
+    } else raisonSansRc = "pas de plateforme de téléchargement direct";
+  } catch (e) { rc = null; raisonSansRc = e.message; }
+
+  // 2. synthèse
+  try {
+    const synthese = await analyser(rc, String(corps.avis || ""));
+    const r = { ok: true, source: rc ? "rc" : "avis", fichier, lienRc, raisonSansRc, synthese, date: new Date().toISOString() };
+    if (cle) { analyses.set(cle, r); if (analyses.size > 800) analyses.delete(analyses.keys().next().value); }
+    console.log(new Date().toISOString(), "ANALYSE OK", cle, r.source, fichier);
+    return json(res, 200, r, autorise);
+  } catch (e) {
+    console.log(new Date().toISOString(), "ANALYSE ECHEC", cle, e.status || "", e.message);
+    const msg = e.status === 401 ? "La clé ANTHROPIC_API_KEY est refusée (invalide ou révoquée)."
+      : e.status === 429 ? "L'API Anthropic est saturée ou le crédit est épuisé, réessayez plus tard."
+      : e.status === 400 && /credit/i.test(e.message || "") ? "Crédit Anthropic insuffisant."
+      : "L'analyse a échoué : " + (e.message || "erreur inconnue").slice(0, 200);
+    return json(res, 502, { erreur: "analyse", message: msg }, autorise);
+  }
+}
+
 /* ---------- serveur HTTP ---------- */
 const derniers = new Map(); // limitation simple : 20 demandes / 10 min / adresse IP
 function tropDeDemandes(ip) {
@@ -232,6 +322,7 @@ ${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
     TRACE = [];
     const o = u.searchParams.get("origine") || "";

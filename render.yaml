@@ -13,7 +13,7 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: "true"
+    buildCommand: npm install --omit=dev
     startCommand: node server.js
     healthCheckPath: /sante
     envVars:
