@@ -60,8 +60,8 @@ async function requete(url, jar, opts = {}) {
 
 /* ---------- lecture du formulaire PRADO ---------- */
 function attr(balise, nom) {
-  const m = balise.match(new RegExp("\\s" + nom + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)')", "i"));
-  return m ? (m[2] ?? m[3]).replace(/&amp;/g, "&").replace(/&quot;/g, '"') : null;
+  const m = balise.match(new RegExp("\\s" + nom + "\\s*=\\s*(\"([^\"]*)\"|'([^']*)'|([^\\s>\"']+))", "i"));
+  return m ? (m[2] ?? m[3] ?? m[4]).replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#0?39;/g, "'") : null;
 }
 function champs(html) {
   const r = [];
@@ -71,9 +71,17 @@ function champs(html) {
   }
   return r;
 }
+// Reproduit ce qu'envoie un navigateur : champs cachés et texte, cases cochées.
 function donneesDeBase(html) {
   const d = new URLSearchParams();
-  for (const c of champs(html)) if (c.type === "hidden" && c.name) d.set(c.name, c.value || "");
+  for (const c of champs(html)) {
+    if (!c.name || c.tag !== "input") continue;
+    if (/^(submit|button|image|file|reset)$/.test(c.type)) continue;
+    if (/^(radio|checkbox)$/.test(c.type)) { if (c.checked) d.set(c.name, c.value || "on"); continue; }
+    if (/^form\[/.test(c.name) || c.name === "keyWord") continue; // formulaires de connexion et de recherche du bandeau
+    d.set(c.name, c.value || "");
+  }
+  if (!d.has("PRADO_POSTBACK_PARAMETER")) d.set("PRADO_POSTBACK_PARAMETER", "");
   return d;
 }
 const trouve = (cs, re) => cs.find(c => re.test(c.name || "") || re.test(c.id || ""));
