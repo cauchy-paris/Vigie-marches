@@ -46,14 +46,14 @@ function texteDoc(buf) {
   return (u16.length > l1.length ? u16 : l1).slice(0, 400000);
 }
 
-const estPdf = b => b.subarray(0, 1024).includes("%PDF");
+const estPdf = b => { const i = b.subarray(0, 1024).indexOf("%PDF"); return i >= 0 && i < 16; };
 const estZip = b => b.length > 4 && b.readUInt32LE(0) === 0x04034b50;
 const estOle = b => b.length > 8 && b.readUInt32BE(0) === 0xd0cf11e0;
 
 /* Transforme le fichier reçu en contenu lisible par Claude :
    { pdf: Buffer } ou { texte: string }, avec le nom du fichier retenu. */
 function extraire(buf, nom, profondeur = 0) {
-  if (estPdf(buf)) return { pdf: buf.subarray(buf.indexOf("%PDF")), nom };
+  if (!estZip(buf) && estPdf(buf)) return { pdf: buf.subarray(buf.indexOf("%PDF")), nom };
   if (estOle(buf)) return { texte: texteDoc(buf), nom };
   if (!estZip(buf)) {
     const t = buf.toString("utf8");
@@ -74,6 +74,7 @@ function extraire(buf, nom, profondeur = 0) {
     if (/reglement|\brc\b|[_\- .]rc[_\- .]|^rc|\/rc/.test(n)) s += 10;
     if (/consultation/.test(n)) s += 3;
     if (/ccap|cctp|ae\b|acte d.engagement|dpgf|bpu|dqe|plan/.test(n)) s -= 6;
+    if (/annexe/.test(n)) s -= 4;
     if (/\.pdf$/.test(n)) s += 2;
     return s;
   };
@@ -82,6 +83,20 @@ function extraire(buf, nom, profondeur = 0) {
     try { const r = extraire(f.lire(), f.nom.split("/").pop(), profondeur + 1); if (r) return r; } catch (e) {}
   }
   return null;
+}
+
+/* Toutes les pièces lisibles d'une archive RC (RC + annexes), la principale en premier. */
+function extraireTous(buf, nom) {
+  if (!estZip(buf) || lireZip(buf).some(e => e.nom === "word/document.xml" || e.nom === "content.xml")) { const r = extraire(buf, nom); return r ? [r] : []; }
+  const premier = extraire(buf, nom);
+  const r = premier ? [premier] : [];
+  for (const e of lireZip(buf).filter(e => !/\/$/.test(e.nom) && /\.(pdf|docx?|odt)$/i.test(e.nom) && e.taille < 40e6 && !/ccap|cctp|dpgf|bpu|dqe|acte d.engagement|(^|[^a-z])ae([^a-z]|$)/i.test(e.nom.split("/").pop())).slice(0, 12)) {
+    const n = e.nom.split("/").pop();
+    if (premier && n === premier.nom) continue;
+    try { const x = extraire(e.lire(), n, 2); if (x) r.push(x); } catch (err) {}
+    if (r.length >= 8) break;
+  }
+  return r;
 }
 
 /* ---------- consigne et format de la synthèse ---------- */
@@ -148,4 +163,4 @@ async function analyser(rc, avis) {
   return JSON.parse(bloc.text);
 }
 
-module.exports = { extraire, analyser, lireZip };
+module.exports = { extraire, extraireTous, analyser, lireZip };

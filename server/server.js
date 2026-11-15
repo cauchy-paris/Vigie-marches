@@ -3,7 +3,7 @@
 // « téléchargement anonyme », puis renvoie le fichier au navigateur.
 "use strict";
 const http = require("http");
-const { extraire, analyser } = require("./analyse");
+const { extraire, extraireTous, analyser } = require("./analyse");
 const { textePdf, analyserTexte } = require("./regles");
 
 const PORT = process.env.PORT || 10000;
@@ -286,9 +286,9 @@ async function routeAnalyse(req, res, u) {
       if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) throw new Error("consultation non retrouvée sur la plateforme");
       const r = await telechargerRc(base.origin, id, org);
       lienRc = r.url;
-      rc = extraire(r.buf, r.nom);
+      if (modeIA) { rc = extraire(r.buf, r.nom); if (rc) fichier = rc.nom; }
+      else { const tous = extraireTous(r.buf, r.nom); if (tous.length) { rc = tous; fichier = tous.map(x => x.nom).join(", "); } }
       if (!rc) throw new Error("RC non lisible (" + r.nom + ")");
-      fichier = rc.nom;
     } else raisonSansRc = "pas de plateforme de téléchargement direct";
   } catch (e) { rc = null; raisonSansRc = e.message; }
 
@@ -297,8 +297,9 @@ async function routeAnalyse(req, res, u) {
     let synthese, source = rc ? "rc" : "avis";
     if (modeIA) synthese = await analyser(rc, String(corps.avis || ""));
     else {
-      let texte = rc ? (rc.pdf ? await textePdf(rc.pdf) : rc.texte) : "";
-      if (rc && texte.replace(/\s/g, "").length < 400) { raisonSansRc = "le RC « " + fichier + " » est une image scannée, son texte n'est pas lisible"; source = "avis"; texte = ""; }
+      let texte = "";
+      if (rc) for (const x of rc) { try { texte += "\n\n" + (x.pdf ? await textePdf(x.pdf) : x.texte); } catch (e) { console.log("lecture", x.nom, e.message); } }
+      if (rc && texte.replace(/\s/g, "").length < 400 && rc.some(x => x.pdf)) { raisonSansRc = "le RC « " + fichier + " » est une image scannée, son texte n'est pas lisible"; source = "avis"; texte = ""; }
       if (!texte) texte = String(corps.avis || "").replace(/^[^=\n]* = /gm, "");
       synthese = analyserTexte(texte);
     }
