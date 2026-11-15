@@ -486,6 +486,29 @@ const PLATEFORMES = [
   {re:/atexo/i, nom:"Plateforme Atexo", compte:"DCE généralement sans compte"},
   {re:/boamp\.fr/i, nom:"BOAMP", compte:""},
 ];
+/* Plateformes Atexo (PLACE, Maximilien, nombreuses plateformes régionales) :
+   à partir du lien de consultation, on construit le lien direct du RC
+   (téléchargeable sans compte) et celui de la page de retrait du DCE. */
+function atexoLiens(url){
+  if(!url) return null;
+  let u; try{ u=new URL(url); }catch(e){ return null; }
+  const p=u.searchParams;
+  const org=p.get("orgAcronyme")||p.get("orgacronyme");
+  if(!org) return null;
+  let id=null, m=u.pathname.match(/\/consultation\/(\d+)/);
+  if(m) id=m[1];
+  else if(/^Entreprise\./.test(p.get("page")||"")){
+    id=p.get("refConsultation")||p.get("id");
+    if(id&&!/^\d+$/.test(id)){ try{ const d=atob(id); if(/^\d+$/.test(d)) id=d; else id=null; }catch(e){ id=null; } }
+  }
+  if(!id) return null;
+  const base=u.origin+"/index.php?page=Entreprise.";
+  return {
+    rc: base+"EntrepriseDownloadReglement&id="+encodeURIComponent(btoa(id))+"&orgAcronyme="+encodeURIComponent(org),
+    dce: base+"EntrepriseDemandeTelechargementDce&id="+id+"&orgAcronyme="+encodeURIComponent(org),
+    consultation: u.origin+"/entreprise/consultation/"+id+"?orgAcronyme="+encodeURIComponent(org),
+  };
+}
 function plateformeDe(url){
   if(!url) return null;
   for(const p of PLATEFORMES) if(p.re.test(url)) return p;
@@ -559,6 +582,7 @@ function analyserDonnees(brut){
   res.urlDocs = docs[0] || depot.find(plateformeConnue) || autres.find(plateformeConnue) || null;
   res.urlDepot = depot[0]||null;
   res.urlProfil = profil[0]||null;
+  res.urls = [...new Set([...docs,...depot,...autres,...profil])].slice(0,12);
 
   // --- CPV
   const cpv=[];
@@ -812,11 +836,13 @@ function carte(m){
   // Boutons RC / DCE / statuts
   const cible=m.urlDocs||m.urlDepot||m.urlProfil;
   const direct=u=>u&&/\.(pdf|zip|docx?|rar|7z)(\?|$)/i.test(u);
-  const lienRC=cible||m.urlAvis, lienDCE=cible||m.urlAvis;
-  const titreRC=cible?(direct(cible)?"Téléchargement direct":"Ouvre la consultation sur "+(plat?plat.nom:"la plateforme")+" : le RC s'y télécharge, seul ou dans le DCE. "+(plat&&plat.compte?plat.compte+".":"")):"Pas de lien de consultation dans l'annonce : ouvre l'avis BOAMP";
+  let atx=null; for(const u of [cible,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
+  const lienRC=atx?atx.rc:(cible||m.urlAvis), lienDCE=atx?atx.dce:(cible||m.urlAvis);
+  const titreRC=atx?"Téléchargement direct du règlement de consultation, sans compte":cible?(direct(cible)?"Téléchargement direct":"Ouvre la consultation sur "+(plat?plat.nom:"la plateforme")+" : le RC s'y télécharge, seul ou dans le DCE. "+(plat&&plat.compte?plat.compte+".":"")):"Pas de lien de consultation dans l'annonce : ouvre l'avis BOAMP";
   const docs=el("div",{class:"docs"},
-    el("a",{class:"btn btn-plein",href:lienRC,target:"_blank",rel:"noopener",title:titreRC},"⬇ RC"),
-    el("a",{class:"btn btn-rouge",href:lienDCE,target:"_blank",rel:"noopener",title:titreRC.replace("le RC s'y télécharge, seul ou dans le DCE","le DCE s'y télécharge")},"⬇ DCE"),
+    el("a",{class:"btn btn-plein",href:lienRC,target:"_blank",rel:"noopener",title:titreRC},atx?"⬇ Télécharger le RC":"⬇ RC"),
+    el("a",{class:"btn btn-rouge",href:lienDCE,target:"_blank",rel:"noopener",title:atx?"Page de retrait du DCE : choisissez le téléchargement anonyme ou identifié":titreRC.replace("le RC s'y télécharge, seul ou dans le DCE","le DCE s'y télécharge")},"⬇ DCE"),
+    atx?el("a",{class:"btn",href:atx.consultation,target:"_blank",rel:"noopener"},"Consultation"):null,
     el("a",{class:"btn",href:m.urlAvis,target:"_blank",rel:"noopener"},"Avis BOAMP"),
     el("button",{class:"btn",type:"button",title:"Marchés déjà attribués par cet acheteur (DECP)",onclick:()=>historiqueAcheteur(m)},"Historique acheteur"));
   const sts=el("div",{class:"statuts",role:"group","aria-label":"Statut de suivi"});
@@ -826,7 +852,9 @@ function carte(m){
     sts.append(b);
   }
   c.append(el("div",{class:"pied"},docs,sts));
-  const note = cible
+  const note = atx
+    ? (plat?plat.nom:"Plateforme")+" · RC en téléchargement direct ; le DCE s'obtient sur la page de retrait, sans compte si vous choisissez « anonyme »"
+    : cible
     ? (plat? (plat.nom+" · "+(plat.compte||"accès selon la plateforme")) : "Lien de consultation indiqué par l'acheteur")
     : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";
   c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:"Avis n° "+m.idweb+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
@@ -842,7 +870,7 @@ function afficherListe(cont,items,vide){
 }
 
 /* ---------- Statuts ---------- */
-function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,refAcheteur}=m; return {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,refAcheteur}; }
+function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur}=m; return {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
   if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
