@@ -344,6 +344,7 @@ async function routeOneDrive(req, res, u) {
   try {
     const dossier = await onedrive.creerDossier(token, driveId, parentId, nom);
     r.webUrl = dossier.webUrl || "";
+    r.id = dossier.id || "";
     await onedrive.creerSousDossiers(token, driveId, dossier.id);
     // le DCE, si la plateforme permet le retrait anonyme
     const origine = String(c.origine || "");
@@ -352,7 +353,8 @@ async function routeOneDrive(req, res, u) {
     try { base = new URL(origine); if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw 0; } catch (e) { r.dce = "absent"; return json(res, 200, r, autorise); }
     let id = String(c.id || ""), org = String(c.org || "");
     if (!id) { const t = await trouverConsultation(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300), String(c.limite || "").slice(0, 25), String(c.acheteur || "").slice(0, 120)).catch(() => null); if (t) { id = t.id; org = t.org; } }
-    if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; return json(res, 200, r, autorise); }
+    if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; r.lienDce = lienRecherche(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300)); return json(res, 200, r, autorise); }
+    r.lienConsultation = base.origin + "/entreprise/consultation/" + id + "?orgAcronyme=" + org;
     let rep;
     try { rep = await telechargerDce(base.origin, id, org); } catch (e) { r.dce = "echec"; r.message = e.message; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
     const taille = Number(rep.headers.get("content-length") || 0);
@@ -376,6 +378,10 @@ function tropDeDemandes(ip) {
   const t = Date.now(), l = (derniers.get(ip) || []).filter(x => t - x < 600000);
   l.push(t); derniers.set(ip, l);
   return l.length > 20;
+}
+// recherche de la consultation sur la plateforme (référence, sinon trois mots de l'objet)
+function lienRecherche(base, ref, objet) {
+  return base + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(ref && !REF_VIDE.test(norm(ref)) ? ref : norm(objet).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !MOTS_VIDES.has(w)).slice(0, 3).join(" "));
 }
 function pageErreur(res, code, message, retour, libelle) {
   res.writeHead(code, { "Content-Type": "text/html; charset=utf-8" });
@@ -449,13 +455,16 @@ http.createServer(async (req, res) => {
       if (t) { id = t.id; org = t.org; console.log(new Date().toISOString(), "TROUVE", hote, ref, "->", id, org); }
     } catch (e) { console.log("recherche", e.message); }
     if (!id) {
-      const rech = base + "/?page=Entreprise.EntrepriseAdvancedSearch&AllCons&keyWord=" + encodeURIComponent(ref && !REF_VIDE.test(norm(ref)) ? ref : norm(objet).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !MOTS_VIDES.has(w)).slice(0, 3).join(" "));
+      const rech = lienRecherche(base, ref, objet);
+      if (quoi === "lien") return json(res, 200, { trouve: false, lien: rech }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null);
       return pageErreur(res, 404, "La consultation n'a pas été retrouvée de façon certaine sur la plateforme. La recherche ci-dessous la contient sans doute : repérez-la par sa date limite, puis utilisez le bouton de retrait du DCE.", rech, "Voir la recherche sur la plateforme");
     }
   }
   if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) return pageErreur(res, 400, "Identifiant de consultation invalide.", retour);
   const page = base + "/index.php?page=Entreprise.";
   if (quoi === "rc") { res.writeHead(302, { Location: page + "EntrepriseDownloadReglement&id=" + encodeURIComponent(Buffer.from(id).toString("base64")) + "&orgAcronyme=" + org }); return res.end(); }
+  // liens directs vers la consultation (pour le raccourci du dossier de réponse quand le DCE n'a pas pu être retiré)
+  if (quoi === "lien") return json(res, 200, { trouve: true, lien: page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org, consultation: base + "/entreprise/consultation/" + id + "?orgAcronyme=" + org }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null);
   if (quoi === "consultation") { res.writeHead(302, { Location: base + "/entreprise/consultation/" + id + "?orgAcronyme=" + org }); return res.end(); }
 
   try {
