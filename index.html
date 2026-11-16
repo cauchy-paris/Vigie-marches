@@ -1166,7 +1166,7 @@ async function enregistrerLienOd(){
   majMs(); toast("Dossier OneDrive enregistré");
 }
 
-/* Raccourcis déposés dans 04_Contrôle/ quand le DCE n'a pas pu être téléchargé automatiquement */
+/* Raccourcis déposés à la racine du dossier de la consultation quand le DCE n'a pas pu être téléchargé automatiquement */
 // Lien direct vers la page de retrait du DCE (jamais la page d'accueil de la plateforme quand on peut l'éviter)
 function estAccueil(u){ try{ const x=new URL(u); return /^\/?(index\.php|entreprise|accueil)?\/?$/i.test(x.pathname)&&!/(id|ref|consultation|reference)=/i.test(x.search); }catch(e){ return true; } }
 async function lienDirectDce(m,atx,serveur){
@@ -1205,21 +1205,21 @@ function fichiersRaccourci(m,liensDce,raison){
 }
 async function deposerRaccourciLocal(dossier,m,liens,raison,J){
   try{
-    let dceDir; try{ dceDir=await dossier.getDirectoryHandle("04_Contrôle",{create:true}); }catch(e){ dceDir=await dossier.getDirectoryHandle("04_Controle",{create:true}); }
+    const dceDir=dossier;
     for(const f of fichiersRaccourci(m,liens,raison)){
       let h; try{ h=await dceDir.getFileHandle(f.nom,{create:true}); }catch(e){ h=await dceDir.getFileHandle(f.nom.normalize("NFD").replace(/[\u0300-\u036f]/g,""),{create:true}); }
       const w=await h.createWritable(); await w.write(f.texte); await w.close();
     }
-    J.ligne("✓ Lien de téléchargement déposé dans le sous-dossier 04_Contrôle (« Télécharger le DCE »)","ok");
+    J.ligne("✓ Lien « Télécharger le DCE » déposé dans le dossier de la consultation","ok");
   }catch(e){ J.ligne("Le lien n'a pas pu être déposé dans le dossier ("+(e.message||e)+").","ko"); }
 }
 async function deposerRaccourciEnLigne(jeton,driveId,dossierId,m,liens,raison,J){
   try{
     for(const f of fichiersRaccourci(m,liens,raison)){
-      const rep=await fetch("https://graph.microsoft.com/v1.0/drives/"+encodeURIComponent(driveId)+"/items/"+encodeURIComponent(dossierId)+":/"+encodeURIComponent("04_Contrôle")+"/"+encodeURIComponent(f.nom)+":/content?@microsoft.graph.conflictBehavior=replace",{method:"PUT",headers:{Authorization:"Bearer "+jeton,"Content-Type":"text/plain"},body:f.texte});
+      const rep=await fetch("https://graph.microsoft.com/v1.0/drives/"+encodeURIComponent(driveId)+"/items/"+encodeURIComponent(dossierId)+":/"+encodeURIComponent(f.nom)+":/content?@microsoft.graph.conflictBehavior=replace",{method:"PUT",headers:{Authorization:"Bearer "+jeton,"Content-Type":"text/plain"},body:f.texte});
       if(!rep.ok) throw new Error("erreur "+rep.status);
     }
-    J.ligne("✓ Lien de téléchargement déposé dans le sous-dossier 04_Contrôle (« Télécharger le DCE »)","ok");
+    J.ligne("✓ Lien « Télécharger le DCE » déposé dans le dossier de la consultation","ok");
   }catch(e){ J.ligne("Le lien n'a pas pu être déposé dans le dossier OneDrive ("+(e.message||e)+").","ko"); }
 }
 
