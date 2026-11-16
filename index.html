@@ -1166,6 +1166,63 @@ async function enregistrerLienOd(){
   majMs(); toast("Dossier OneDrive enregistré");
 }
 
+/* Raccourcis déposés dans 04_Contrôle/ quand le DCE n'a pas pu être téléchargé automatiquement */
+// Lien direct vers la page de retrait du DCE (jamais la page d'accueil de la plateforme quand on peut l'éviter)
+function estAccueil(u){ try{ const x=new URL(u); return /^\/?(index\.php|entreprise|accueil)?\/?$/i.test(x.pathname)&&!/(id|ref|consultation|reference)=/i.test(x.search); }catch(e){ return true; } }
+async function lienDirectDce(m,atx,serveur){
+  if(serveur&&serveur.lienDce) return {lien:serveur.lienDce,consultation:serveur.lienConsultation||""};
+  if(atx&&atx.dce) return {lien:atx.dce,consultation:atx.consultation};
+  if(atx&&atx.recherche){
+    // la plateforme ne donne que sa page d'accueil : le serveur retrouve la consultation
+    try{
+      const u=new URL(atx.dceAuto); u.searchParams.set("quoi","lien");
+      const rep=await fetch(u,{signal:AbortSignal.timeout(90000)});
+      const j=await rep.json(); if(j&&j.lien) return {lien:j.lien,consultation:j.consultation||""};
+    }catch(e){}
+  }
+  const directs=[m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])].filter(Boolean);
+  const lien=directs.find(u=>!estAccueil(u))||m.urlAvis||directs[0]||("https://www.boamp.fr/pages/avis/?q=idweb:"+encodeURIComponent(m.idweb||""));
+  return {lien,consultation:""};
+}
+function fichiersRaccourci(m,liensDce,raison){
+  const lien=liensDce.lien;
+  const echap=t=>String(t||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const pf=plateformeDe(lien);
+  let lim=""; try{ if(m.limite) lim=new Date(m.limite).toLocaleString("fr-FR",{timeZone:"Europe/Paris",dateStyle:"full",timeStyle:"short"}); }catch(e){}
+  const url="[InternetShortcut]\r\nURL="+lien+"\r\n";
+  const liens=[[lien===m.urlAvis?"Ouvrir l'avis BOAMP (il indique où retirer le DCE)":"Télécharger le DCE sur la plateforme"+(pf?" ("+pf.nom+")":""),lien]];
+  if(liensDce.consultation&&liensDce.consultation!==lien) liens.push(["Voir la page de la consultation",liensDce.consultation]);
+  if(m.urlAvis&&m.urlAvis!==lien) liens.push(["Voir l'avis BOAMP",m.urlAvis]);
+  const html='<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Télécharger le DCE</title>'+
+    '<style>body{font-family:Segoe UI,Arial,sans-serif;max-width:640px;margin:32px auto;padding:0 16px;color:#1b2a4a}h1{font-size:20px;color:#1d4ed8}a.b{display:block;margin:12px 0;padding:14px 16px;background:#1d4ed8;color:#fff;border-radius:8px;text-decoration:none;font-weight:600}a.b+a.b{background:#fff;color:#1d4ed8;border:1px solid #1d4ed8}p{line-height:1.5}.n{color:#b91c1c}</style></head><body>'+
+    '<h1>'+echap(m.objet)+'</h1><p>'+echap(m.acheteur)+(lim?'<br>Date limite : <b>'+echap(lim)+'</b>':'')+'</p>'+
+    '<p class="n">Le DCE n\'a pas pu être téléchargé automatiquement'+(raison?' : '+echap(raison):'')+'.</p>'+
+    (/AdvancedSearch/.test(lien)?'<p>La consultation n\'a pas été identifiée de façon certaine : le lien ouvre la recherche sur la plateforme, repérez-la par sa date limite.</p>':'')+
+    liens.map(([t,u])=>'<a class="b" href="'+echap(u)+'" target="_blank" rel="noopener">'+echap(t)+'</a>').join("")+
+    (pf&&pf.compte?'<p>'+echap(pf.compte)+'.</p>':'')+
+    '<p>Une fois le DCE téléchargé, enregistrez-le dans le dossier DCE de la consultation.</p></body></html>';
+  return [{nom:"Télécharger le DCE.url",texte:url},{nom:"Télécharger le DCE.html",texte:html}];
+}
+async function deposerRaccourciLocal(dossier,m,liens,raison,J){
+  try{
+    let dceDir; try{ dceDir=await dossier.getDirectoryHandle("04_Contrôle",{create:true}); }catch(e){ dceDir=await dossier.getDirectoryHandle("04_Controle",{create:true}); }
+    for(const f of fichiersRaccourci(m,liens,raison)){
+      let h; try{ h=await dceDir.getFileHandle(f.nom,{create:true}); }catch(e){ h=await dceDir.getFileHandle(f.nom.normalize("NFD").replace(/[\u0300-\u036f]/g,""),{create:true}); }
+      const w=await h.createWritable(); await w.write(f.texte); await w.close();
+    }
+    J.ligne("✓ Lien de téléchargement déposé dans le sous-dossier 04_Contrôle (« Télécharger le DCE »)","ok");
+  }catch(e){ J.ligne("Le lien n'a pas pu être déposé dans le dossier ("+(e.message||e)+").","ko"); }
+}
+async function deposerRaccourciEnLigne(jeton,driveId,dossierId,m,liens,raison,J){
+  try{
+    for(const f of fichiersRaccourci(m,liens,raison)){
+      const rep=await fetch("https://graph.microsoft.com/v1.0/drives/"+encodeURIComponent(driveId)+"/items/"+encodeURIComponent(dossierId)+":/"+encodeURIComponent("04_Contrôle")+"/"+encodeURIComponent(f.nom)+":/content?@microsoft.graph.conflictBehavior=replace",{method:"PUT",headers:{Authorization:"Bearer "+jeton,"Content-Type":"text/plain"},body:f.texte});
+      if(!rep.ok) throw new Error("erreur "+rep.status);
+    }
+    J.ligne("✓ Lien de téléchargement déposé dans le sous-dossier 04_Contrôle (« Télécharger le DCE »)","ok");
+  }catch(e){ J.ligne("Le lien n'a pas pu être déposé dans le dossier OneDrive ("+(e.message||e)+").","ko"); }
+}
+
 let preparationEnCours=false;
 async function preparerDossier(m){
   if(preparationEnCours) return;
@@ -1187,14 +1244,15 @@ async function preparerDossier(m){
     if(!atx) atx=atexoParRecherche(m);
     if(!atx){
       J.ligne("Le DCE de cette consultation ne peut pas être téléchargé automatiquement (plateforme sans retrait anonyme).","ko");
-      const lien=m.urlDocs||m.urlDepot||m.urlProfil||m.urlAvis;
-      J.ligne("").append(el("a",{href:lien,target:"_blank",rel:"noopener"},"Ouvrir la consultation pour télécharger le DCE"));
+      const liens=await lienDirectDce(m,null);
+      J.ligne("").append(el("a",{href:liens.lien,target:"_blank",rel:"noopener"},"Ouvrir la consultation pour télécharger le DCE"));
+      await deposerRaccourciLocal(dossier,m,liens,"plateforme sans retrait anonyme",J);
       return;
     }
     const l=J.ligne("⏳ Téléchargement du DCE… (jusqu'à une minute si le serveur était en veille)");
-    const rep=await fetch(atx.dceAuto,{method:"GET"});
-    const type=rep.headers.get("content-type")||"";
-    if(!rep.ok||/text\/html/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; J.ligne("").append(el("a",{href:atx.dceAuto,target:"_blank",rel:"noopener"},"Voir le détail et le lien de retrait")); return; }
+    let rep=null; try{ rep=await fetch(atx.dceAuto,{method:"GET"}); }catch(e){}
+    const type=(rep&&rep.headers.get("content-type"))||"";
+    if(!rep||!rep.ok||/text\/html/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; J.ligne("").append(el("a",{href:atx.dceAuto,target:"_blank",rel:"noopener"},"Voir le détail et le lien de retrait")); await deposerRaccourciLocal(dossier,m,await lienDirectDce(m,atx),rep?"":"serveur injoignable",J); return; }
     const cd=rep.headers.get("content-disposition")||"";
     let nomFichier=decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i)||[])[1]||"")||(cd.match(/filename="?([^";]+)/i)||[])[1]||"DCE.zip";
     nomFichier=propre(nomFichier)||"DCE.zip";
@@ -1257,9 +1315,11 @@ async function preparerEnLigne(m,od){
     if(!rep.ok){ (r.webUrl?J.ligne(""):l).textContent="✗ "+(r.message||"Erreur "+rep.status); if(!r.webUrl) l.className="ko"; return; }
     if(r.dce==="ok") J.ligne("✓ DCE dézippé : "+r.fichiers+" fichier"+(r.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(r.total>r.fichiers?" ("+(r.total-r.fichiers)+" en échec)":""),r.total>r.fichiers?"ko":"ok");
     else{
-      const lien=r.lienDce||(atx&&atx.dce)||m.urlDocs||m.urlDepot||m.urlProfil||m.urlAvis;
+      const liens=r.dce==="introuvable"&&r.lienDce?{lien:r.lienDce,consultation:""}:await lienDirectDce(m,atx,r), lien=liens.lien;
       const msg={absent:"Cette plateforme ne permet pas le retrait automatique du DCE.",introuvable:"La consultation n'a pas été retrouvée de façon certaine sur la plateforme.",echec:"Le DCE n'a pas pu être téléchargé : "+(r.message||""),trop_gros:"Le DCE dépasse 300 Mo, téléchargez-le à la main."}[r.dce]||"DCE non déposé.";
       J.ligne(msg+" ","ko").append(el("a",{href:lien,target:"_blank",rel:"noopener"},"Télécharger le DCE sur la plateforme"));
+      const raison={absent:"plateforme sans retrait anonyme",introuvable:"consultation non retrouvée de façon certaine sur la plateforme",echec:r.message||"",trop_gros:"DCE de plus de 300 Mo"}[r.dce]||"";
+      if(r.id) await deposerRaccourciEnLigne(jeton,od.driveId,r.id,m,liens,raison,J);
     }
     (r.erreurs||[]).slice(0,5).forEach(e=>J.ligne("• "+e,"ko"));
   }catch(e){ l.textContent="✗ Le serveur ne répond pas ("+e.message+"). Réessayez dans une minute avec le bouton 📁 Dossier de réponse."; l.className="ko"; }
