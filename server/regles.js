@@ -226,6 +226,44 @@ function attendus(T, P) {
   return r;
 }
 
+/* ---------- dates (questions, visite) ---------- */
+const MOIS = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+// première date d'un texte (déjà « plat »), au format JJ/MM/AAAA
+function dateDans(p) {
+  let m = p.match(/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})\b/);
+  if (m) { const a = m[3].length === 2 ? "20" + m[3] : m[3]; return m[1].padStart(2, "0") + "/" + m[2].padStart(2, "0") + "/" + a; }
+  m = p.match(new RegExp("\\b(\\d{1,2})(?:er)? (" + MOIS.join("|") + ")(?: (\\d{4}))?"));
+  if (m) return m[1].padStart(2, "0") + "/" + String(MOIS.indexOf(m[2]) + 1).padStart(2, "0") + (m[3] ? "/" + m[3] : "");
+  return "";
+}
+// date de visite : première date dans les lignes qui suivent une mention de visite
+function dateVisite(P) {
+  for (const m of P.matchAll(/visite/g)) { const d = dateDans(P.slice(m.index, m.index + 400)); if (d) return d; }
+  return "";
+}
+// date limite des questions : date explicite, ou « N jours avant la date limite »
+function questions(T, P) {
+  const re = /(questions?|demandes? (de |d')?(renseignements?|precisions?|informations?|eclaircissements?)|renseignements? complementaires?)/g;
+  let meilleur = null;
+  for (const m of P.matchAll(re)) {
+    const s = phrase(T, m.index, 200, 320), p = plat(s);
+    if (!/au plus tard|avant|jusqu'au|date limite|delai|limite/.test(p)) continue;
+    const date = dateDans(p.slice(Math.max(0, p.indexOf(plat(T.slice(m.index, m.index + m[0].length))))));
+    const j = p.match(/(\d{1,2}|six|sept|huit|dix|cinq|quatre|trois|quinze) \(?\d*\)? ?jours?( calendaires| ouvres| francs| ouvrables)? (au moins |au plus tard )?avant (la |le )?(date|remise|limite|reception|depot|cloture)/);
+    const nb = j ? ({ trois: 3, quatre: 4, cinq: 5, six: 6, sept: 7, huit: 8, dix: 10, quinze: 15 }[j[1]] || Number(j[1])) : 0;
+    if (date || nb) { meilleur = { texte: s.length > 300 ? s.slice(0, 300) + "…" : s, date, jours: nb }; if (date) break; }
+  }
+  return meilleur || { texte: "", date: "", jours: 0 };
+}
+function typeVisite(visite, P) {
+  if (/(pas|aucune) (de )?visite|n'est pas prevu de visite|sans visite|visite.{0,30}(sans objet|n'est pas prevue)/.test(P) && !/visite (des lieux |du site |sur site )?(est )?obligatoire/.test(P)) return "non";
+  const p = plat(visite || "");
+  if (!p) return "";
+  if (/pas de visite|aucune visite|sans visite|visite.{0,40}(sans objet|n'est pas (prevue|obligatoire|organisee))/.test(p)) return /n'est pas obligatoire/.test(p) ? "facultative" : "non";
+  if (/obligatoire/.test(p)) return "obligatoire";
+  return "facultative";
+}
+
 /* ---------- analyse complète ---------- */
 function analyserTexte(T) {
   T = T.replace(/\r/g, "").replace(/[  ]/g, " ").replace(/[ \t]+/g, " ");
@@ -239,11 +277,12 @@ function analyserTexte(T) {
   const visite = premierePhrase(T, P, /visite (des lieux|du site|sur site|obligatoire|facultative|preal)/g);
   const date = premierePhrase(T, P, /dates? (et heures? )?limites? (de |d')?(la )?(reception|remise|depot)/g, s => /\d{1,2}[\/ .]\d{1,2}[\/ .]\d{2,4}|\d{1,2} (janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)/.test(s));
   const lotsL = lots(T);
+  const q = questions(T, P);
   const s = {
     type_marche: type, procedure: proc, attendus: attendus(T, P),
     corps_etat: corpsEtat(lotsL.map(l => l.intitule).join(" ") || T.slice(0, 20000)),
     lots: lotsL, criteres: crit, qualifications: qual, capacites: capacites(T, P),
-    ...mt, duree, visite, date_limite: date, points_attention: pointsAttention(T, P),
+    ...mt, duree, visite, visite_type: typeVisite(visite, P), visite_date: dateVisite(P), questions: q, date_limite: date, points_attention: pointsAttention(T, P),
   };
   const morceaux = [type + (proc ? ", " + proc.charAt(0).toLowerCase() + proc.slice(1) : "") + "."];
   if (lotsL.length) morceaux.push(lotsL.length + " lot" + (lotsL.length > 1 ? "s" : "") + ".");
