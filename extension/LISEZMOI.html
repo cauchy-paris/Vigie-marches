@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Installer l'extension Vigie</title>
+<style>
+  :root{--bleu:#16337a;--bleu-fonce:#0d2257;--bleu-clair:#e8eefb;--rouge:#d22d39;--rouge-clair:#fdeced;--encre:#14203d;--gris:#5b6684;--blanc:#fff}
+  body{margin:0;background:var(--blanc);color:var(--encre);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  header{background:var(--bleu);color:var(--blanc);border-bottom:4px solid var(--rouge);padding:18px 16px}
+  header div,main{max-width:760px;margin:0 auto}
+  header h1{margin:0;font-size:22px}
+  header p{margin:4px 0 0;opacity:.85}
+  main{padding:8px 16px 40px}
+  h2{color:var(--bleu);font-size:18px;margin:28px 0 8px}
+  ol{padding-left:22px;display:grid;gap:8px}
+  code,kbd{font:14px ui-monospace,Consolas,monospace;background:var(--bleu-clair);color:var(--bleu-fonce);border-radius:4px;padding:1px 5px}
+  .encadre{border-left:4px solid var(--rouge);background:var(--rouge-clair);padding:10px 14px;border-radius:6px}
+  .info{border-left:4px solid var(--bleu);background:var(--bleu-clair);padding:10px 14px;border-radius:6px}
+  a{color:#3a5fc4}
+</style>
+</head>
+<body>
+<header><div><h1>Installer l'extension Vigie</h1><p>Chrome ou Edge, sur votre PC. Environ 2 minutes, une seule fois.</p></div></header>
+<main>
+  <h2>À quoi elle sert</h2>
+  <p>Quand une plateforme (AWS-Achat, achatpublic, e-marchespublics, et parfois PLACE ou Maximilien) ne donne pas le DCE sans compte, l'extension le télécharge avec <strong>votre session déjà ouverte</strong> dans le navigateur. Elle garde aussi vos sessions actives (une visite discrète toutes les 10 minutes), pour que vous n'ayez pas à vous reconnecter sans cesse.</p>
+  <p class="info">Vos identifiants restent dans votre navigateur. L'extension ne lit pas vos mots de passe et n'envoie rien au serveur Vigie, à part le DCE lui-même quand vous utilisez OneDrive en ligne.</p>
+
+  <h2>1. Récupérer l'extension</h2>
+  <ol>
+    <li>Dans Vigie, onglet <strong>Mes marchés</strong>, cliquez <strong>Télécharger l'extension (.zip)</strong>.</li>
+    <li>Ouvrez votre dossier Téléchargements, faites un clic droit sur <code>vigie-extension.zip</code> puis <strong>Extraire tout</strong>.</li>
+    <li>Rangez le dossier <code>vigie-extension</code> obtenu à un endroit où il restera (par exemple <code>Documents</code>). <strong>Ne le supprimez pas</strong> : le navigateur s'en sert en permanence.</li>
+  </ol>
+
+  <h2>2. L'installer</h2>
+  <ol>
+    <li>Ouvrez un nouvel onglet et tapez <code>chrome://extensions</code> (Chrome) ou <code>edge://extensions</code> (Edge), puis Entrée.</li>
+    <li>Activez le <strong>Mode développeur</strong> (interrupteur en haut à droite dans Chrome, en bas à gauche dans Edge).</li>
+    <li>Cliquez <strong>Charger l'extension non empaquetée</strong> et choisissez le dossier <code>vigie-extension</code>.</li>
+    <li>L'extension « Vigie Marchés » apparaît. Cliquez l'icône puzzle 🧩 de la barre d'outils, puis l'épingle à côté de Vigie Marchés pour garder son icône bleue et rouge visible.</li>
+    <li>Rechargez la page Vigie : dans <strong>Mes marchés</strong>, l'état indique « installée ».</li>
+  </ol>
+  <p class="encadre">Au démarrage, Chrome ou Edge peut afficher « Désactiver les extensions en mode développeur ». Cliquez simplement sur la croix pour garder l'extension.</p>
+
+  <h2>3. Se connecter une fois sur chaque plateforme</h2>
+  <ol>
+    <li>Cliquez l'icône Vigie Marchés : elle liste PLACE, Maximilien, AWS-Achat, achatpublic et e-marchespublics, avec « Connecté » ou « Non connecté ».</li>
+    <li>Pour chaque plateforme non connectée, cliquez <strong>Se connecter</strong> et identifiez-vous comme d'habitude, en cochant <strong>« Se souvenir de moi »</strong> quand la case existe.</li>
+    <li>Laissez cochée l'option <strong>Garder mes sessions ouvertes</strong>.</li>
+    <li>Vérifiez que le navigateur ne supprime pas les cookies à la fermeture (Paramètres, Confidentialité, « Effacer les cookies quand vous fermez toutes les fenêtres » doit être désactivé).</li>
+  </ol>
+
+  <h2>4. Au quotidien</h2>
+  <ul>
+    <li><strong>PLACE, Maximilien et les plateformes régionales</strong> : le bouton « Télécharger le DCE » et « J'y réponds » passent par votre session. Le retrait est enregistré à votre nom, donc vous recevez les avis de modification du DCE.</li>
+    <li><strong>AWS-Achat, achatpublic, e-marchespublics</strong> : « J'y réponds » ouvre la consultation dans un onglet où vous êtes déjà connecté. Cliquez le téléchargement du DCE sur la plateforme : Vigie récupère le fichier et le range dans le dossier de réponse.</li>
+    <li><strong>Code de vérification (CAPTCHA image)</strong> : Vigie affiche l'image dans une fenêtre, vous recopiez le code et cliquez Valider.</li>
+    <li><strong>« Je ne suis pas un robot »</strong> (case à cocher, images à sélectionner) : cette vérification ne peut se faire que sur la plateforme. Vigie vous donne le lien de la page de retrait.</li>
+  </ul>
+
+  <h2>Mettre à jour l'extension</h2>
+  <p>Téléchargez de nouveau le zip depuis Vigie, remplacez le contenu du dossier <code>vigie-extension</code>, puis cliquez la flèche circulaire de l'extension dans <code>chrome://extensions</code>.</p>
+</main>
+</body>
+</html>

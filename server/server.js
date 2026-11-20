@@ -90,39 +90,114 @@ function donneesDeBase(html) {
 const trouve = (cs, re) => cs.find(c => re.test(c.name || "") || re.test(c.id || ""));
 const versNom = s => (s || "").replace(/_/g, "$");
 
-async function telechargerDce(origine, id, org) {
-  const jar = new Map();
-  const urlDemande = origine + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + encodeURIComponent(id) + "&orgAcronyme=" + encodeURIComponent(org);
+/* ---------- CAPTCHA ----------
+   Certaines plateformes demandent de recopier un code (CAPTCHA image) avant le retrait du DCE.
+   Le serveur récupère l'image avec la même session (cookies), la renvoie à Vigie qui l'affiche,
+   l'utilisateur tape le code, et le serveur reprend le parcours là où il s'était arrêté.
+   Les CAPTCHA « Je ne suis pas un robot » (reCAPTCHA, hCaptcha, Turnstile) ne peuvent pas être relayés :
+   on renvoie alors le lien de la page de retrait pour que l'utilisateur le fasse sur la plateforme. */
+const RE_ROBOT = /g-recaptcha|recaptcha\/api|grecaptcha|h-captcha|hcaptcha\.com|cf-turnstile|challenges\.cloudflare\.com|frc-captcha|friendlycaptcha/i;
+function captchaImage(html, base) {
+  const cs = champs(html);
+  const champ = cs.find(c => c.tag === "input" && c.name && /^(text|tel|number)$/.test(c.type) && /captcha|securimage|code_?secu|codesecurite|code_?verif|codeverification|antispam/i.test(c.name + " " + (c.id || "")));
+  if (!champ) return null;
+  let src = null;
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const s = attr(m[0], "src") || "";
+    if (/captcha|securimage|codesecurite|antispam/i.test(s + " " + (attr(m[0], "id") || "") + " " + (attr(m[0], "class") || "") + " " + (attr(m[0], "alt") || ""))) { src = s; break; }
+  }
+  if (!src) return null;
+  return { champ: champ.name, src: /^data:/i.test(src) ? src : new URL(src, base).toString() };
+}
+const captchas = new Map(); // jeton -> { etat, base, id, org, expire }
+function nettoyerCaptchas() { const t = Date.now(); for (const [k, v] of captchas) if (v.expire < t) captchas.delete(k); }
+async function erreurCaptcha(etat, cap, base, id, org, incorrect) {
+  let image = cap.src;
+  if (!/^data:/i.test(image)) {
+    const { rep } = await requete(cap.src, etat.jar, { headers: { Referer: etat.url } });
+    if (!rep.ok) throw new Error("Image du CAPTCHA indisponible (" + rep.status + ")");
+    const type = (rep.headers.get("content-type") || "image/png").split(";")[0];
+    image = "data:" + (/^image\//.test(type) ? type : "image/png") + ";base64," + Buffer.from(await rep.arrayBuffer()).toString("base64");
+  }
+  nettoyerCaptchas();
+  if (captchas.size > 200) captchas.delete(captchas.keys().next().value);
+  const jeton = require("crypto").randomBytes(18).toString("base64url");
+  captchas.set(jeton, { etat: { ...etat, captcha: cap.champ }, base, id, org, expire: Date.now() + 10 * 60000 });
+  const e = new Error(incorrect ? "Code CAPTCHA incorrect" : "La plateforme demande un code CAPTCHA");
+  e.captcha = { jeton, image, incorrect: !!incorrect };
+  return e;
+}
+function erreurRobot() {
+  const e = new Error("La plateforme demande de cocher « Je ne suis pas un robot » : cette vérification se fait uniquement sur la plateforme");
+  e.robot = true; return e;
+}
 
-  // 1. page de demande
-  let { rep, url } = await requete(urlDemande, jar);
-  let html = await rep.text();
-  if (TRACE) TRACE.push({ etape: 1, titre: (html.match(/<title>([^<]*)/i) || [])[1], champs: champs(html).filter(c => c.type !== "hidden" || /PRADO/.test(c.name || "")).map(c => [c.type, c.name, c.id, (c.value || "").slice(0, 80)]).slice(0, 60) });
-  if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Page de retrait du DCE introuvable");
+// Parcours de retrait du DCE. `reprise` = { jeton, code } quand l'utilisateur vient de taper le CAPTCHA.
+async function telechargerDce(origine, id, org, reprise) {
+  let etat, code = null;
+  if (reprise) {
+    const r = captchas.get(String(reprise.jeton || ""));
+    if (!r || r.expire < Date.now()) throw new Error("Le code CAPTCHA a expiré, relancez le téléchargement");
+    captchas.delete(String(reprise.jeton));
+    ({ etat } = r); origine = r.base; id = r.id; org = r.org;
+    code = String(reprise.code || "").trim().slice(0, 40);
+  } else {
+    const jar = new Map();
+    const urlDemande = origine + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + encodeURIComponent(id) + "&orgAcronyme=" + encodeURIComponent(org);
+    // 1. page de demande
+    const { rep, url } = await requete(urlDemande, jar);
+    const html = await rep.text();
+    if (TRACE) TRACE.push({ etape: 1, titre: (html.match(/<title>([^<]*)/i) || [])[1], champs: champs(html).filter(c => c.type !== "hidden" || /PRADO/.test(c.name || "")).map(c => [c.type, c.name, c.id, (c.value || "").slice(0, 80)]).slice(0, 60) });
+    if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Page de retrait du DCE introuvable");
+    etat = { jar, url, html, etape: 2 };
+  }
+  let { jar, url, html } = etat;
+  let rep;
 
-  // 2. choix « anonyme » + acceptation des conditions, puis validation
-  let cs = champs(html);
-  let d = donneesDeBase(html);
-  const radio = cs.find(c => c.type === "radio" && /choixAnonyme/i.test((c.value || "") + (c.id || "")));
-  if (radio) d.set(radio.name, radio.value || versNom(radio.id));
-  else d.set("ctl0$CONTENU_PAGE$EntrepriseFormulaireDemande$RadioGroup", "ctl0$CONTENU_PAGE$EntrepriseFormulaireDemande$choixAnonyme");
-  for (const c of cs) if (c.type === "checkbox" && c.name && /accept|condition|cgu/i.test((c.name || "") + (c.id || ""))) d.set(c.name, c.value || "on");
-  const valider = trouve(cs, /validateButton/i);
-  d.set("PRADO_POSTBACK_TARGET", valider ? (valider.name || versNom(valider.id)) : "ctl0$CONTENU_PAGE$validateButton");
-  ({ rep, url } = await requete(url, jar, { method: "POST", body: d, headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
-  html = await rep.text();
-  if (TRACE) TRACE.push({ etape: 2, envoye: [...d.keys()].filter(k => !/PAGESTATE/.test(k)).map(k => [k, d.get(k).slice(0, 80)]), titre: (html.match(/<title>([^<]*)/i) || [])[1], erreurs: (html.match(/class="[^"]*(erreur|error|alert)[^"]*"[^>]*>[\s\S]{0,300}/gi) || []).slice(0, 5).map(x => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200)), liens: [...html.matchAll(/(?:id|href)="([^"]*(?:ownload|Dce|DCE)[^"]*)"/g)].map(m => m[1]).slice(0, 20) });
-  if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Étape « anonyme » refusée par la plateforme");
+  if (etat.etape === 2) {
+    // 2. choix « anonyme » + acceptation des conditions (+ CAPTCHA éventuel), puis validation
+    const cap = captchaImage(html, url);
+    if (cap && code === null) throw await erreurCaptcha(etat, cap, origine, id, org);
+    if (!cap && RE_ROBOT.test(html)) throw erreurRobot();
+    const cs = champs(html);
+    const d = donneesDeBase(html);
+    const radio = cs.find(c => c.type === "radio" && /choixAnonyme/i.test((c.value || "") + (c.id || "")));
+    if (radio) d.set(radio.name, radio.value || versNom(radio.id));
+    else d.set("ctl0$CONTENU_PAGE$EntrepriseFormulaireDemande$RadioGroup", "ctl0$CONTENU_PAGE$EntrepriseFormulaireDemande$choixAnonyme");
+    for (const c of cs) if (c.type === "checkbox" && c.name && /accept|condition|cgu/i.test((c.name || "") + (c.id || ""))) d.set(c.name, c.value || "on");
+    if (cap) d.set(cap.champ, code);
+    const valider = trouve(cs, /validateButton/i);
+    d.set("PRADO_POSTBACK_TARGET", valider ? (valider.name || versNom(valider.id)) : "ctl0$CONTENU_PAGE$validateButton");
+    ({ rep, url } = await requete(url, jar, { method: "POST", body: d, headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
+    html = await rep.text();
+    if (TRACE) TRACE.push({ etape: 2, envoye: [...d.keys()].filter(k => !/PAGESTATE/.test(k)).map(k => [k, d.get(k).slice(0, 80)]), titre: (html.match(/<title>([^<]*)/i) || [])[1], erreurs: (html.match(/class="[^"]*(erreur|error|alert)[^"]*"[^>]*>[\s\S]{0,300}/gi) || []).slice(0, 5).map(x => x.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 200)), liens: [...html.matchAll(/(?:id|href)="([^"]*(?:ownload|Dce|DCE)[^"]*)"/g)].map(m => m[1]).slice(0, 20) });
+    if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Étape « anonyme » refusée par la plateforme");
+    // code refusé : la plateforme réaffiche le formulaire avec un nouveau CAPTCHA
+    const cap2 = !/completeDownload/i.test(html) && captchaImage(html, url);
+    if (cap2) throw await erreurCaptcha({ jar, url, html, etape: 2 }, cap2, origine, id, org, cap && true);
+    etat = { jar, url, html, etape: 3 };
+    code = cap ? null : code;
+  }
 
-  // 3. demande du DCE complet
-  cs = champs(html);
-  d = donneesDeBase(html);
+  // 3. demande du DCE complet (certaines plateformes placent le CAPTCHA ici)
+  const cap3 = captchaImage(html, url);
+  if (cap3 && code === null) throw await erreurCaptcha(etat, cap3, origine, id, org);
+  if (!cap3 && !/completeDownload/i.test(html) && RE_ROBOT.test(html)) throw erreurRobot();
+  const cs = champs(html);
+  const d = donneesDeBase(html);
   const complet = trouve(cs, /completeDownload/i);
   if (!complet && !/completeDownload/i.test(html)) throw new Error("Lien de téléchargement du DCE absent (le DCE est peut-être réservé aux comptes)");
+  if (cap3) d.set(cap3.champ, code);
   d.set("PRADO_POSTBACK_TARGET", complet ? (complet.name || versNom(complet.id)) : "ctl0$CONTENU_PAGE$EntrepriseDownloadDce$completeDownload");
   ({ rep } = await requete(url, jar, { method: "POST", body: d, headers: { "Content-Type": "application/x-www-form-urlencoded" } }));
   const type = rep.headers.get("content-type") || "";
-  if (/text\/html/i.test(type)) throw new Error("La plateforme a renvoyé une page au lieu du fichier");
+  if (/text\/html/i.test(type)) {
+    const h = await rep.text();
+    const cap4 = captchaImage(h, url);
+    if (cap4) throw await erreurCaptcha({ jar, url, html: h, etape: 3 }, cap4, origine, id, org, !!cap3);
+    throw new Error("La plateforme a renvoyé une page au lieu du fichier");
+  }
+  rep.consultation = { base: origine, id, org };
   return rep;
 }
 
@@ -348,15 +423,17 @@ async function routeOneDrive(req, res, u) {
     await onedrive.creerSousDossiers(token, driveId, dossier.id);
     // le DCE, si la plateforme permet le retrait anonyme
     const origine = String(c.origine || "");
-    if (!origine) { r.dce = "absent"; return json(res, 200, r, autorise); }
+    const reprise = c.jeton ? { jeton: String(c.jeton), code: String(c.code || "") } : null;
+    if (!origine && !reprise) { r.dce = "absent"; return json(res, 200, r, autorise); }
     let base;
-    try { base = new URL(origine); if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw 0; } catch (e) { r.dce = "absent"; return json(res, 200, r, autorise); }
+    if (reprise) { const p = captchas.get(reprise.jeton); base = p ? new URL(p.base) : null; c.id = p ? p.id : ""; c.org = p ? p.org : ""; if (!base) { r.dce = "echec"; r.message = "Le code CAPTCHA a expiré, relancez « Dossier de réponse »"; return json(res, 200, r, autorise); } }
+    else try { base = new URL(origine); if (!hoteAutorise(base.hostname) || (base.protocol !== "https:" && !process.env.HOTE_TEST)) throw 0; } catch (e) { r.dce = "absent"; return json(res, 200, r, autorise); }
     let id = String(c.id || ""), org = String(c.org || "");
     if (!id) { const t = await trouverConsultation(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300), String(c.limite || "").slice(0, 25), String(c.acheteur || "").slice(0, 120)).catch(() => null); if (t) { id = t.id; org = t.org; } }
     if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; r.lienDce = lienRecherche(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300)); return json(res, 200, r, autorise); }
     r.lienConsultation = base.origin + "/entreprise/consultation/" + id + "?orgAcronyme=" + org;
     let rep;
-    try { rep = await telechargerDce(base.origin, id, org); } catch (e) { r.dce = "echec"; r.message = e.message; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
+    try { rep = await telechargerDce(base.origin, id, org, reprise); } catch (e) { r.dce = e.captcha ? "captcha" : e.robot ? "robot" : "echec"; r.message = e.message; if (e.captcha) r.captcha = e.captcha; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
     const taille = Number(rep.headers.get("content-length") || 0);
     if (taille > 300e6) { try { await rep.body.cancel(); } catch (e) {} r.dce = "trop_gros"; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
     const buf = Buffer.from(await rep.arrayBuffer());
@@ -393,15 +470,110 @@ ${retour ? `<p><a href="${retour.replace(/"/g, "&quot;")}" style="display:inline
 </body>`);
 }
 
+async function envoyerFichier(res, rep, id) {
+  const cd = rep.headers.get("content-disposition") || `attachment; filename="DCE_${id}.zip"`;
+  res.writeHead(200, {
+    "Content-Type": rep.headers.get("content-type") || "application/zip",
+    "Content-Disposition": /attachment/i.test(cd) ? cd : `attachment; filename="DCE_${id}.zip"`,
+    ...(rep.headers.get("content-length") ? { "Content-Length": rep.headers.get("content-length") } : {}),
+    "Cache-Control": "no-store",
+  });
+  const lecteur = rep.body.getReader();
+  for (;;) { const { done, value } = await lecteur.read(); if (done) break; if (!res.write(value)) await new Promise(r => res.once("drain", r)); }
+  res.end();
+}
+const echap = t => String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+// Vigie (appel fetch) reçoit du JSON ; un clic sur un lien reçoit une page
+function echecDce(req, res, e, lienDce) {
+  const o = req.headers.origin, appli = o && ORIGINES.has(o);
+  if (e.captcha) {
+    if (appli) return json(res, 409, { erreur: "captcha", captcha: e.captcha, lienDce, message: e.message }, o);
+    return pageCaptcha(res, e.captcha, lienDce);
+  }
+  if (e.robot) {
+    if (appli) return json(res, 409, { erreur: "robot", lienDce, message: e.message }, o);
+    return pageErreur(res, 409, e.message + ". Ouvrez la page de retrait, cochez la case, puis téléchargez le DCE.", lienDce);
+  }
+  if (appli) return json(res, 502, { erreur: "echec", lienDce, message: e.message }, o);
+  return pageErreur(res, 502, e.message + ". Vous pouvez le récupérer manuellement sur la plateforme (choisir « anonyme »).", lienDce);
+}
+// Fenêtre « Recopiez le code » quand le DCE est demandé par un simple lien
+function pageCaptcha(res, cap, lienDce) {
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(`<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Code de vérification</title>
+<body style="font:16px system-ui;max-width:520px;margin:40px auto;padding:0 16px;color:#14203d;background:#fff">
+<div style="border:2px solid #16337a;border-top:6px solid #d22d39;border-radius:12px;padding:20px 22px">
+<h1 style="color:#16337a;font-size:20px;margin:0 0 8px">Code de vérification demandé</h1>
+<p style="margin:0 0 14px">La plateforme demande de recopier le code ci-dessous avant de donner le DCE.${cap.incorrect ? ` <strong style="color:#d22d39">Le code précédent était incorrect, voici un nouveau code.</strong>` : ""}</p>
+<form method="post" action="/dce/captcha">
+<input type="hidden" name="jeton" value="${echap(cap.jeton)}">
+<img src="${echap(cap.image)}" alt="Code à recopier" style="display:block;min-height:50px;max-width:100%;border:1px solid #c9d3ea;border-radius:6px;margin-bottom:12px;image-rendering:auto">
+<label for="code" style="font-weight:600;display:block;margin-bottom:4px">Code</label>
+<input id="code" name="code" autocomplete="off" autocapitalize="off" spellcheck="false" autofocus required style="font:20px ui-monospace,monospace;letter-spacing:.15em;padding:8px 10px;border:1.5px solid #16337a;border-radius:8px;width:100%;box-sizing:border-box">
+<button style="margin-top:14px;background:#16337a;color:#fff;border:0;padding:11px 18px;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer">Valider et télécharger le DCE</button>
+</form>
+<p style="font-size:13px;color:#5b6684;margin:16px 0 0">Code illisible ? <a href="${echap(lienDce)}" style="color:#3a5fc4">Ouvrir la page de retrait sur la plateforme</a>.</p>
+</div></body></html>`);
+}
+async function routeCaptcha(req, res) {
+  const o = req.headers.origin, appli = o && ORIGINES.has(o);
+  if (req.method === "OPTIONS") { res.writeHead(204, appli ? { "Access-Control-Allow-Origin": o, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {}); return res.end(); }
+  if (req.method !== "POST") return pageErreur(res, 405, "Lien expiré : relancez le téléchargement du DCE depuis Vigie.");
+  const brut = await lireCorps(req, 4000);
+  let p;
+  try { p = /json/i.test(req.headers["content-type"] || "") ? JSON.parse(brut) : Object.fromEntries(new URLSearchParams(brut)); } catch (e) { p = {}; }
+  const enAttente = captchas.get(String(p.jeton || ""));
+  const lienDce = enAttente ? enAttente.base + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + enAttente.id + "&orgAcronyme=" + enAttente.org : "";
+  try {
+    const rep = await telechargerDce(null, null, null, { jeton: p.jeton, code: p.code });
+    await envoyerFichier(res, rep, rep.consultation.id);
+    console.log(new Date().toISOString(), "DCE OK (captcha)", rep.consultation.base, rep.consultation.id);
+  } catch (e) {
+    console.log(new Date().toISOString(), "DCE ECHEC (captcha)", e.message);
+    if (!res.headersSent) echecDce(req, res, e, lienDce); else res.end();
+  }
+}
+// DCE déjà récupéré dans le navigateur (extension Vigie, session de l'utilisateur) : dépôt dézippé dans OneDrive
+async function routeOneDriveFichier(req, res) {
+  const o = req.headers.origin;
+  const autorise = o && ORIGINES.has(o) ? o : null;
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, autorise ? { "Access-Control-Allow-Origin": autorise, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Drive, X-Dossier, X-Nom", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {});
+    return res.end();
+  }
+  if (req.method !== "POST") return json(res, 405, { erreur: "POST attendu" }, autorise);
+  if (!autorise) return json(res, 403, { erreur: "Origine non autorisée" });
+  const token = (req.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const driveId = String(req.headers["x-drive"] || ""), dossierId = String(req.headers["x-dossier"] || "");
+  let nom = "DCE.zip"; try { nom = decodeURIComponent(String(req.headers["x-nom"] || "DCE.zip")).slice(0, 150) || "DCE.zip"; } catch (e) {}
+  if (!token || token.length > 10000) return json(res, 401, { erreur: "connexion", message: "Connexion Microsoft manquante." }, autorise);
+  if (!/^[\w!.-]{5,200}$/.test(driveId) || !/^[\w!.-]{5,200}$/.test(dossierId)) return json(res, 400, { erreur: "parametres", message: "Dossier OneDrive non configuré." }, autorise);
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (tropDeDemandes(ip)) return json(res, 429, { erreur: "quota", message: "Trop de demandes en peu de temps, réessayez dans quelques minutes." }, autorise);
+  if (Number(req.headers["content-length"] || 0) > 200e6) return json(res, 413, { erreur: "trop_gros", message: "Le DCE dépasse 200 Mo, déposez-le à la main." }, autorise);
+  const morceaux = []; let n = 0;
+  for await (const c of req) { n += c.length; if (n > 200e6) return json(res, 413, { erreur: "trop_gros", message: "Le DCE dépasse 200 Mo, déposez-le à la main." }, autorise); morceaux.push(c); }
+  const buf = Buffer.concat(morceaux);
+  try {
+    const d = await onedrive.deposerDce(token, driveId, dossierId, nom, buf);
+    console.log(new Date().toISOString(), "ONEDRIVE FICHIER OK", d.fichiers + "/" + d.total);
+    return json(res, 200, { ok: true, dce: "ok", taille: buf.length, ...d }, autorise);
+  } catch (e) {
+    return json(res, e.status === 401 ? 401 : 502, { erreur: e.status === 401 ? "connexion" : "onedrive", message: e.message }, autorise);
+  }
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   // l'appli peut récupérer le DCE pour le ranger elle-même dans le dossier de réponse
-  if (u.pathname === "/dce" && req.headers.origin && ORIGINES.has(req.headers.origin)) {
+  if ((u.pathname === "/dce" || u.pathname === "/dce/captcha") && req.headers.origin && ORIGINES.has(req.headers.origin)) {
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
     res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Length");
     res.setHeader("Vary", "Origin");
   }
   if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
+  if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
@@ -469,20 +641,11 @@ http.createServer(async (req, res) => {
 
   try {
     const rep = await telechargerDce(base, id, org);
-    const cd = rep.headers.get("content-disposition") || `attachment; filename="DCE_${id}.zip"`;
-    res.writeHead(200, {
-      "Content-Type": rep.headers.get("content-type") || "application/zip",
-      "Content-Disposition": /attachment/i.test(cd) ? cd : `attachment; filename="DCE_${id}.zip"`,
-      ...(rep.headers.get("content-length") ? { "Content-Length": rep.headers.get("content-length") } : {}),
-      "Cache-Control": "no-store",
-    });
-    const lecteur = rep.body.getReader();
-    for (;;) { const { done, value } = await lecteur.read(); if (done) break; if (!res.write(value)) await new Promise(r => res.once("drain", r)); }
-    res.end();
+    await envoyerFichier(res, rep, id);
     console.log(new Date().toISOString(), "DCE OK", hote, id, org);
   } catch (e) {
     console.log(new Date().toISOString(), "DCE ECHEC", hote, id, org, e.message);
-    if (!res.headersSent) pageErreur(res, 502, e.message + ". Vous pouvez le récupérer manuellement sur la plateforme (choisir « anonyme »).", page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org);
+    if (!res.headersSent) echecDce(req, res, e, page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org);
     else res.end();
   }
 }).listen(PORT, () => console.log("Serveur DCE sur le port " + PORT));
