@@ -1852,6 +1852,9 @@ async function avisBoampParLien(url){
     const chemin=(u.hostname.replace(/^www\./i,"")+u.pathname).replace(/\/+$/,"");
     // chemin distinctif seulement (avec un numéro), pas « index.cfm » ou « ent_detail.do » communs à toute la plateforme
     if(/\/[^\/]*\d{4,}[^\/]*\/?$|\/\d{4,}\//.test(u.pathname)) essais.push({where:"search("+q(chemin)+")",verif:d=>d.includes(chemin)});
+    // numéro dans le nom de la page (AWS : /Annonces/AAPC_1905464.htm, le même numéro figure dans l'avis BOAMP : IDM=1905464)
+    const num=(u.pathname.match(/[_\-\/](\d{5,})(?:\.\w+)?\/?$/)||[])[1];
+    if(num) essais.push({where:"search("+q(num)+")",verif:d=>new RegExp("[=_/]"+num+"(\\D|$)").test(d)});
     const atexo=u.pathname.match(/\/consultation\/(\d{4,})/);
     if(atexo) essais.push({where:"search("+q(atexo[1])+")",verif:d=>new RegExp("(consultation/|refConsultation=|[?&;]id=)"+atexo[1]+"(\\D|$)").test(d)});
     u.searchParams.forEach((v,k)=>{ if(v.length>=5&&v.length<=60&&/\d/.test(v)&&/^[\w.\-]+$/.test(v)&&!/^(page|orgacronyme|lang|langue|e)$/i.test(k)) essais.push({where:"search("+q(v)+")",verif:d=>new RegExp("[=/_]"+v.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(\\W|$)").test(d)}); });
