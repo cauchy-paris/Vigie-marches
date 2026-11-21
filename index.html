@@ -44,6 +44,14 @@ a{color:var(--bleu-moyen)}
 .onglets{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
 .onglet{background:transparent;border:1.5px solid rgba(255,255,255,.35);color:var(--blanc);border-radius:999px;padding:7px 14px;cursor:pointer;font-weight:600;display:flex;gap:8px;align-items:center}
 .onglet[aria-selected="true"]{background:var(--blanc);color:var(--bleu);border-color:var(--blanc)}
+.actions-bandeau{display:flex;gap:8px;flex-wrap:wrap}
+.btn-bandeau{background:var(--blanc);color:var(--bleu);border:1.5px solid var(--blanc);border-radius:999px;padding:7px 14px;cursor:pointer;font-weight:700;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn-bandeau:hover{background:var(--bleu-clair)}
+.btn-bandeau.rouge{background:var(--rouge);color:var(--blanc);border-color:var(--rouge)}
+.btn-bandeau.rouge:hover{background:#b3222d}
+.btn-bandeau.ok{background:transparent;color:var(--blanc);border-color:rgba(255,255,255,.6)}
+.btn-bandeau.ok::before{content:"";width:8px;height:8px;border-radius:50%;background:#5fd38d}
+@media (max-width:900px){.actions-bandeau{width:100%}.actions-bandeau .btn-bandeau{flex:1;justify-content:center}}
 .onglet .pastille{background:var(--rouge);color:var(--blanc);border-radius:999px;font-size:11px;padding:1px 7px}
 
 .page{max-width:1400px;margin:0 auto;padding:20px;display:grid;grid-template-columns:320px minmax(0,1fr);gap:20px;align-items:start}
@@ -201,6 +209,29 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .ajout .etat-lecture.ko{color:var(--rouge)}
 .ajout .rempli{border-color:var(--vert)!important;background:var(--vert-clair)!important}
 @media (max-width:560px){.ajout .grille{grid-template-columns:1fr}}
+.panneau{width:min(720px,100%);max-height:calc(100vh - 32px);overflow:auto}
+.panneau .bloc{border:1px solid var(--trait);border-radius:10px;padding:12px 14px;display:grid;gap:8px}
+.panneau .bloc h4{margin:0;font-size:14px;color:var(--bleu-fonce)}
+.panneau .ligne{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.panneau .ligne select{flex:1;min-width:180px;font:14px/1.4 var(--f-texte);letter-spacing:normal;padding:7px 9px;border:1.5px solid var(--trait);border-radius:8px;width:auto}
+.panneau .note{font-size:12.5px;color:var(--gris);margin:0}
+.panneau .pn-etat{font-size:13px;margin:0}
+.panneau .pn-etat.ok{color:var(--vert)} .panneau .pn-etat.ko{color:var(--rouge)}
+.panneau input{font:14px/1.4 var(--f-texte);letter-spacing:normal;padding:7px 9px;border:1.5px solid var(--trait);border-radius:8px;width:auto}
+.panneau .ligne input[type=text],.panneau .ligne input[type=password]{flex:1;min-width:180px}
+.panneau input[type=checkbox]{width:auto;padding:0;accent-color:var(--bleu)}
+.zone-colle{border:2px dashed var(--bleu-moyen);border-radius:10px;padding:14px;text-align:center;color:var(--gris);font-size:13px;background:var(--fond);cursor:text;min-height:64px;display:grid;place-items:center}
+.zone-colle:focus,.zone-colle.survol{border-color:var(--rouge);background:var(--rouge-clair);outline:none}
+.trouves{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.trouves li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start;border:1px solid var(--trait);border-left:4px solid var(--bleu);border-radius:8px;padding:8px 10px;font-size:13px}
+.trouves li.deja{opacity:.6;border-left-color:var(--gris)}
+.trouves li.ok{border-left-color:var(--vert)} .trouves li.ko{border-left-color:var(--rouge)} .trouves li.encours{border-left-color:var(--ambre)}
+.trouves input{width:auto;margin-top:3px;accent-color:var(--bleu)}
+.trouves .t{font-weight:600;color:var(--encre);overflow-wrap:anywhere}
+.trouves .s{grid-column:2/-1;color:var(--gris);font-size:12px;overflow-wrap:anywhere}
+.trouves .pf{font:600 11px/1.6 var(--f-mono);background:var(--bleu-clair);color:var(--bleu);border-radius:4px;padding:0 6px;white-space:nowrap}
+.trouves .res{grid-column:2/-1;font-size:12.5px}
+.trouves .res.ok{color:var(--vert)} .trouves .res.ko{color:var(--rouge)}
 .ext-etat{font-weight:600}
 .ext-etat.ok{color:#14603a}
 .ext-etat.ko{color:var(--rouge)}
@@ -257,6 +288,10 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
       <button class="onglet" role="tab" aria-selected="false" data-vue="attribues">Marchés attribués</button>
       <button class="onglet" role="tab" aria-selected="false" data-vue="sources">Sources &amp; plateformes</button>
     </nav>
+    <div class="actions-bandeau">
+      <button class="btn-bandeau" id="btnOd" type="button" title="Connecter votre drive (OneDrive, Google Drive, Dropbox…) pour les dossiers de réponse"><span aria-hidden="true">☁</span> <span id="btnOdTexte">Connecter mon drive</span></button>
+      <button class="btn-bandeau rouge" id="btnMail" type="button" title="Ajouter à Vigie les marchés des mails d'alerte des plateformes"><span aria-hidden="true">✉</span> Importer les alertes mail</button>
+    </div>
   </div>
 </header>
 
@@ -1118,6 +1153,7 @@ async function majRacine(){
   const e=$("#racineNom"); if(!e) return;
   if(!FS_OK){ e.textContent="non disponible dans ce navigateur (utilisez Chrome ou Edge sur PC)"; return; }
   const h=await idbGet("racine"); e.textContent=h?"« "+h.name+" »":"pas encore choisi";
+  majBoutonOd();
 }
 const propre=t=>(t||"").normalize("NFC").replace(/[<>:"\/\\|?*\x00-\x1f]/g," ").replace(/\s+/g," ").trim().replace(/[. ]+$/,"");
 const MOTS_VIDES_NOM=new Set("de des du la le les l d et a au aux en pour sur dans un une par avec relatif relatifs relative relatives concernant marche marches accord cadre prestations prestation travaux services fournitures objet lot lots".split(" "));
@@ -1154,8 +1190,10 @@ function journal(titre){
   return { ligne:(t,cls)=>{ const li=el("li",{class:cls||"",text:t}); lignes.append(li); return li; } };
 }
 /* ---------- Connexion Microsoft (OneDrive en ligne) ----------
-   Application déclarée dans Microsoft Entra par 4G Ingénierie (identifiants publics, pas de secret). */
-const MS_CLIENT_ID="6b6c5506-bb5e-48d4-a594-eca34bf48837", MS_TENANT="c8e0a9bc-18bd-46ef-9666-4108eeb221c1";
+   Application déclarée dans Microsoft Entra (tenant Cauchy Paris ; identifiants publics, pas de secret).
+   MS_MULTI=true quand l'application accepte tous les comptes Microsoft (« Comptes dans un annuaire
+   organisationnel et comptes Microsoft personnels ») : chaque client se connecte alors avec le sien. */
+const MS_CLIENT_ID="6b6c5506-bb5e-48d4-a594-eca34bf48837", MS_TENANT="c8e0a9bc-18bd-46ef-9666-4108eeb221c1", MS_MULTI=false;
 const MS_SCOPES=["Files.ReadWrite","User.Read"];
 const CLE_OD="vigie.onedrive.v1";
 let msApp=null, msPret=null;
@@ -1165,7 +1203,7 @@ function msInit(){
   if(!msConfigure()) return Promise.resolve(null);
   if(!msPret) msPret=(async()=>{
     if(!window.msal) await chargerScript("https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js");
-    msApp=new msal.PublicClientApplication({auth:{clientId:MS_CLIENT_ID,authority:"https://login.microsoftonline.com/"+MS_TENANT,redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
+    msApp=new msal.PublicClientApplication({auth:{clientId:MS_CLIENT_ID,authority:"https://login.microsoftonline.com/"+(MS_MULTI?"common":MS_TENANT),redirectUri:location.origin+location.pathname},cache:{cacheLocation:"localStorage"}});
     await msApp.initialize();
     const r=await msApp.handleRedirectPromise().catch(()=>null);
     if(r&&r.account) msApp.setActiveAccount(r.account);
@@ -1176,23 +1214,27 @@ function msInit(){
   return msPret;
 }
 function msCompte(){ return msApp&&msApp.getActiveAccount(); }
-async function msConnecter(){
+async function msConnecter(scopes=MS_SCOPES){
   const app=await msInit(); if(!app) return null;
-  try{ const r=await app.loginPopup({scopes:MS_SCOPES,prompt:"select_account"}); app.setActiveAccount(r.account); majMs(); return r.account; }
+  try{ const r=await app.loginPopup({scopes,prompt:"select_account"}); app.setActiveAccount(r.account); majMs(); return r.account; }
   catch(e){
-    if(/popup|block/i.test((e.errorCode||"")+e.message)){ await app.loginRedirect({scopes:MS_SCOPES}); return null; }
+    if(/popup|block/i.test((e.errorCode||"")+e.message)){ await app.loginRedirect({scopes}); return null; }
     if(!/user_cancelled/i.test(e.errorCode||"")) toast("Connexion Microsoft impossible : "+(e.errorMessage||e.message));
     return null;
   }
 }
-async function msJeton(interactif){
+async function msJeton(interactif,scopes=MS_SCOPES){
   const app=await msInit(); if(!app) return null;
   const compte=app.getActiveAccount(); if(!compte) return null;
-  try{ return (await app.acquireTokenSilent({scopes:MS_SCOPES,account:compte})).accessToken; }
+  try{ return (await app.acquireTokenSilent({scopes,account:compte})).accessToken; }
   catch(e){
     if(!interactif) return null;
-    try{ return (await app.acquireTokenPopup({scopes:MS_SCOPES,account:compte})).accessToken; }
-    catch(e2){ if(/popup|block/i.test((e2.errorCode||"")+e2.message)) await app.acquireTokenRedirect({scopes:MS_SCOPES,account:compte}); return null; }
+    try{ return (await app.acquireTokenPopup({scopes,account:compte})).accessToken; }
+    catch(e2){
+      if(/popup|block/i.test((e2.errorCode||"")+e2.message)){ await app.acquireTokenRedirect({scopes,account:compte}); return null; }
+      if(!/user_cancelled/i.test(e2.errorCode||"")) toast("Autorisation Microsoft refusée : "+(e2.errorMessage||e2.message));
+      return null;
+    }
   }
 }
 async function majMs(){
@@ -1204,10 +1246,11 @@ async function majMs(){
   const od=lire(CLE_OD,null);
   $("#odEtat").textContent=od?"Dossier enregistré : « "+od.nom+" »":"Aucun dossier enregistré pour l'instant.";
   if(od&&!$("#lienOd").value) $("#lienOd").value=od.lien||"";
+  majBoutonOd();
 }
 // Lien de partage OneDrive -> identifiants du dossier (API Graph « shares »)
-async function enregistrerLienOd(){
-  const lien=$("#lienOd").value.trim();
+async function enregistrerLienOd(lienDonne){
+  const lien=(lienDonne!=null?lienDonne:$("#lienOd").value).trim();
   if(!/^https:\/\/[^/]*(sharepoint\.com|onedrive\.live\.com|1drv\.ms)\//i.test(lien)){ toast("Collez le lien de partage du dossier OneDrive"); return; }
   if(!msCompte()&&!await msConnecter()) return;
   const jeton=await msJeton(true); if(!jeton) return;
@@ -1216,7 +1259,7 @@ async function enregistrerLienOd(){
   const j=await rep.json().catch(()=>({}));
   if(!rep.ok||!j.folder){ toast(rep.ok?"Ce lien ne pointe pas vers un dossier":"Dossier inaccessible : "+((j.error&&j.error.message)||rep.status)); return; }
   ecrire(CLE_OD,{lien,driveId:j.parentReference.driveId,id:j.id,nom:j.name,webUrl:j.webUrl});
-  majMs(); toast("Dossier OneDrive enregistré");
+  $("#lienOd").value=lien; majMs(); toast("Dossier OneDrive enregistré"); return true;
 }
 
 /* ---------- Fenêtre CAPTCHA ----------
@@ -1878,6 +1921,18 @@ async function ficheParServeur(url){
   return await rep.json().catch(()=>({ok:false,message:"Réponse illisible du serveur ("+rep.status+")"}));
 }
 
+/* --- briques communes (fenêtre d'ajout et import des alertes mail) --- */
+function squeletteMarche(id){
+  return {idweb:id||"MAN-"+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,4).toUpperCase(),parution:null,descripteurs:[],famille:"",nature:"",lots:[],cpv:[],duree:"",montant:"",urls:[],refDocs:"",urlDepot:null,urlProfil:null,brut:null};
+}
+function poserLien(m,url,base){
+  if(url&&!/(^|\.)boamp\.fr$/i.test((()=>{ try{ return new URL(url).hostname; }catch(e){ return ""; } })())){
+    m.urlDocs=url; m.urls=[url,...(m.urls||[]).filter(x=>x!==url)].slice(0,12);
+    if(!m.urlAvis||!base||!base.brut) m.urlAvis=url;
+  }else if(!m.urlAvis) m.urlAvis=url||"";
+  if(m.brut&&String(m.brut).length>80000) m.brut=null;
+}
+
 /* --- fenêtre d'ajout / modification --- */
 function ouvrirAjout(existant){
   let base=existant?{...existant}:null, fiche=null, lu="";
@@ -1967,7 +2022,7 @@ function ouvrirAjout(existant){
     const url=f.url.value.trim();
     if(!f.objet.value.trim()||!f.acheteur.value.trim()){ toast("Indiquez au moins l'intitulé et l'acheteur"); (f.objet.value.trim()?f.acheteur:f.objet).focus(); return; }
     const dep=(f.dep.value.trim().match(/^(\d{2,3}|2[ab])\b/i)||[])[1];
-    const m=base?{...base}:{idweb:existant?existant.idweb:"MAN-"+Date.now().toString(36).toUpperCase(),parution:null,descripteurs:[],famille:"",nature:"",lots:[],cpv:[],duree:"",montant:"",urls:[],refDocs:"",urlDepot:null,urlProfil:null,brut:null};
+    const m=base?{...base}:squeletteMarche(existant&&existant.idweb);
     if(!base&&fiche&&fiche.cpv) m.cpv=fiche.cpv;
     Object.assign(m,{
       objet:f.objet.value.trim(), acheteur:f.acheteur.value.trim(), limite:parisVersIso(f.limite.value),
@@ -1975,11 +2030,7 @@ function ouvrirAjout(existant){
       villeAcheteur:f.ville.value.trim(), lieu:f.lieu.value.trim(), refAcheteur:f.ref.value.trim(), accordCadre:f.ac.checked,
       description:f.description.value.trim(), manuel:true, lienSaisi:url, ajoute:(existant&&existant.ajoute)||new Date().toISOString(),
     });
-    if(url&&!/(^|\.)boamp\.fr$/i.test((()=>{ try{ return new URL(url).hostname; }catch(e){ return ""; } })())){
-      m.urlDocs=url; m.urls=[url,...(m.urls||[]).filter(x=>x!==url)].slice(0,12);
-      if(!m.urlAvis||!base||!base.brut) m.urlAvis=url;
-    }else if(!m.urlAvis) m.urlAvis=url||"";
-    if(m.brut&&String(m.brut).length>80000) m.brut=null;
+    poserLien(m,url,base);
     if(existant&&existant.idweb!==m.idweb){ delete manuels[existant.idweb]; }
     manuels[m.idweb]=m; sauverManuels();
     if(statuts[m.idweb]){ statuts[m.idweb].m=snapshot(m); ecrire(CLE_STATUTS,statuts); }
@@ -2111,6 +2162,483 @@ function changerVue(v){
   if(v==="suivi") afficherSuivi();
 }
 
+/* ====================================================================
+   Bouton du bandeau « Connecter mon drive » (chaque utilisateur connecte le sien)
+   ==================================================================== */
+async function majBoutonOd(){
+  const t=$("#btnOdTexte"), b=$("#btnOd"); if(!t||!b) return;
+  const od=lire(CLE_OD,null), c=msCompte();
+  let txt="Connecter mon drive", ok=false;
+  if(c&&od){ txt="OneDrive · "+od.nom; ok=true; }
+  else{ const h=FS_OK?await idbGet("racine"):null; if(h){ txt="Dossier du PC · "+h.name; ok=true; } else if(c) txt="Choisir le dossier OneDrive"; }
+  t.textContent=txt.length>34?txt.slice(0,33)+"…":txt; b.classList.toggle("ok",ok);
+}
+function ouvrirOneDrive(){
+  const fermer=()=>{ fond.remove(); document.removeEventListener("keydown",echap); majBoutonOd(); };
+  const echap=e=>{ if(e.key==="Escape") fermer(); };
+  const etatCompte=el("p",{class:"pn-etat"}), etatDossier=el("p",{class:"pn-etat"}), etatPc=el("p",{class:"pn-etat"});
+  const bCompte=el("button",{class:"btn btn-plein",type:"button"},"Se connecter à Microsoft");
+  const lien=el("input",{type:"text",placeholder:"https://…-my.sharepoint.com/:f:/… (lien de partage du dossier)"});
+  const bLien=el("button",{class:"btn btn-plein",type:"button"},"Enregistrer ce dossier");
+  const aOuvrir=el("a",{class:"btn",target:"_blank",rel:"noopener",hidden:true},"Ouvrir le dossier");
+  const bPc=el("button",{class:"btn",type:"button"},"Choisir le dossier du PC");
+  async function maj(){
+    await msInit().catch(()=>null);
+    const c=msCompte(), od=lire(CLE_OD,null);
+    etatCompte.className="pn-etat "+(c?"ok":""); etatCompte.textContent=c?"✓ Connecté avec "+(c.username||c.name):"Pas encore connecté.";
+    bCompte.textContent=c?"Changer de compte":"Se connecter à Microsoft";
+    bCompte.classList.toggle("btn-plein",!c);
+    lien.disabled=bLien.disabled=!c;
+    if(od&&!lien.value) lien.value=od.lien||"";
+    etatDossier.className="pn-etat "+(od?"ok":""); etatDossier.textContent=od?"✓ Dossier des réponses : « "+od.nom+" »":(c?"Collez le lien de partage du dossier où ranger les réponses (dans OneDrive : clic droit sur le dossier › Partager › Copier le lien).":"Connectez-vous d'abord.");
+    aOuvrir.hidden=!(od&&od.webUrl); if(od&&od.webUrl) aOuvrir.href=od.webUrl;
+    if(!FS_OK){ etatPc.textContent="Disponible sur PC avec Chrome ou Edge."; bPc.disabled=true; }
+    else{ const h=await idbGet("racine"); etatPc.className="pn-etat "+(h?"ok":""); etatPc.textContent=h?"✓ Dossier du PC : « "+h.name+" » (utilisé si OneDrive en ligne n'est pas connecté)":"Aucun dossier du PC choisi."; }
+    majMs();
+  }
+  bCompte.onclick=async()=>{ if(await msConnecter()) maj(); };
+  bLien.onclick=async()=>{ bLien.disabled=true; try{ if(await enregistrerLienOd(lien.value)) maj(); }catch(e){ toast(e.message); } finally{ bLien.disabled=false; } };
+  lien.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); bLien.click(); } });
+  bPc.onclick=async()=>{ try{ await dossierRacine(true); toast("Dossier du PC enregistré"); maj(); }catch(e){} };
+  const boite=el("div",{class:"captcha panneau",role:"dialog","aria-modal":"true","aria-label":"Connecter mon drive"},
+    el("h3",{text:"Connecter mon drive"}),
+    el("p",{class:"note",text:"Quand vous cliquez « J'y réponds », Vigie crée le dossier de la consultation dans votre drive, y dépose le DCE dézippé et tient à jour « 00_Suivi des marchés.xlsx ». Chaque utilisateur connecte son propre drive : rien n'est partagé avec les autres utilisateurs de Vigie."}),
+    el("div",{class:"ligne"},el("a",{href:"aide/connexions.html#drive",target:"_blank",rel:"noopener",class:"btn"},"Procédure pas à pas"),el("a",{href:"aide/connexions.html",download:"Vigie - connecter son drive et sa messagerie.html",class:"btn"},"Télécharger la procédure")),
+    msConfigure()?el("div",{class:"bloc"},
+      el("h4",{text:"OneDrive ou SharePoint (Microsoft 365) — PC, téléphone, tablette"}),
+      el("p",{class:"note",text:"1. Connectez votre compte Microsoft."}), etatCompte, el("div",{class:"ligne"},bCompte),
+      el("p",{class:"note",text:"2. Collez le lien de partage du dossier où ranger les réponses."}), etatDossier, el("div",{class:"ligne"},lien,bLien,aOuvrir)):null,
+    el("div",{class:"bloc"},
+      el("h4",{text:"Google Drive, Dropbox, iCloud, OneDrive ou serveur — dossier synchronisé sur ce PC"}),
+      el("p",{class:"note",text:"Installez l'application de votre drive sur le PC (Google Drive pour ordinateur, Dropbox…), puis choisissez ici le dossier des réponses : le drive le synchronise tout seul. Chrome ou Edge sur PC."}),
+      etatPc, el("div",{class:"ligne"},bPc)),
+    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:fermer},"Fermer")));
+  const fond=el("div",{class:"captcha-fond"},boite);
+  fond.addEventListener("click",e=>{ if(e.target===fond) fermer(); });
+  document.addEventListener("keydown",echap);
+  document.body.append(fond);
+  maj();
+}
+
+/* ====================================================================
+   Import des alertes mail des plateformes
+   - Outlook / Microsoft 365 : lecture de la boîte via Microsoft Graph (droit Mail.Read),
+     directement depuis le navigateur : les mails ne passent pas par le serveur Vigie.
+   - Toute autre messagerie (Gmail…) : copier-coller du mail ou dépôt du fichier .eml.
+   Seuls les liens des consultations retenus sont ensuite lus (BOAMP, puis serveur Vigie).
+   ==================================================================== */
+const CLE_MAIL="vigie.mail.v1";
+const MAIL_SCOPES=["Mail.Read"];
+// expéditeurs connus des alertes (domaine de l'adresse)
+const EXPEDITEURS_ALERTES=/(^|[@.])(boamp\.fr|dila\.gouv\.fr|marches-publics\.gouv\.fr|maximilien\.fr|aws-france\.com|aws-achat\.com|marches-publics\.info|achatsolutions\.fr|achatpublic\.com|achatpublic\.info|e-marchespublics\.com|marchesonline\.com|francemarches\.com|klekoon\.com|marches-securises\.fr|megalis\.bretagne\.bzh|local-trust\.com|atexo\.com|ted\.europa\.eu)$/i;
+// échanges sur une consultation (pas des alertes) : questions, compléments, rejets…
+const SUJETS_ECHANGES=/non retenu|compl[ée]ment|notification|courrier aws|question|r[ée]ponse [àa]|rejet|attribution|n[ée]gociation|invitation|accus[ée] de r[ée]ception|d[ée]p[ôo]t|mot de passe|identifiant|compte|confirmation d.inscription/i;
+const LIBELLES_GENERIQUES=/^(voir|consulter|acc[ée]der|cliquez|ici|d[ée]tails?|en savoir plus|lien|t[ée]l[ée]charger|dce|r[èe]glement|voir l.avis|voir la consultation|plus d.informations?|https?:)/i;
+
+function pfDeLien(u){
+  const h=u.hostname.replace(/^www\./i,"").toLowerCase(), chemin=u.pathname+u.search;
+  if(/(^|\.)boamp\.fr$/.test(h)){ const id=(decodeURIComponent(chemin).match(/(?:^|[^\d])(\d{2}-\d{4,7})(?!\d)/)||[])[1]; return id?{pf:"BOAMP",cle:"boamp:"+id,url:"https://www.boamp.fr/pages/avis/?q=idweb:%22"+id+"%22"}:null; }
+  const nom=/marches-publics\.gouv\.fr$/.test(h)?"PLACE":/maximilien\.fr$/.test(h)?"Maximilien":/marches-publics\.info$|aws-/.test(h)?"AWS-Achat":/achatpublic/.test(h)?"achatpublic":/e-marchespublics/.test(h)?"e-marchespublics":null;
+  // Atexo (PLACE, Maximilien et plateformes régionales)
+  let x=chemin.match(/\/(?:entreprise\/)?consultation\/(\d{4,})/i);
+  if(x) return {pf:nom||"Atexo",cle:h+":"+x[1]+":"+(u.searchParams.get("orgAcronyme")||""),url:u.href};
+  if(/EntrepriseDetailsConsultation|EntrepriseDetailConsultation/i.test(chemin)){
+    const id=u.searchParams.get("refConsultation")||u.searchParams.get("id"); if(id) return {pf:nom||"Atexo",cle:h+":"+id+":"+(u.searchParams.get("orgAcronyme")||""),url:u.href};
+  }
+  // AWS-Achat
+  x=chemin.match(/AAPC_(\d+)/i)||chemin.match(/[?&]IDM=(\d+)/i);
+  if(x&&(nom==="AWS-Achat"||/AAPC_/i.test(chemin))) return {pf:"AWS-Achat",cle:"aws:"+x[1],url:u.href};
+  // achatpublic
+  x=chemin.match(/PCSLID=([\w-]+)/i);
+  if(x) return {pf:"achatpublic",cle:"ap:"+x[1],url:u.href};
+  // e-marchespublics
+  if(nom==="e-marchespublics"){ x=u.pathname.match(/(\d{5,})/); if(x&&!/desinscri|unsubscribe/i.test(chemin)) return {pf:nom,cle:"emp:"+x[1],url:u.href}; }
+  // autre plateforme connue : page avec un numéro distinctif
+  if(nom&&/\d{5,}/.test(chemin)&&!/desinscri|unsubscribe|logo|image|compte|login|connexion|alerte/i.test(chemin)) return {pf:nom,cle:h+u.pathname+u.search,url:u.href};
+  return null;
+}
+// liens de suivi (redirections) et liens « sécurisés » Outlook : on retrouve l'adresse d'origine
+function deballerLien(href){
+  let u; try{ u=new URL(href); }catch(e){ return null; }
+  for(let i=0;i<3;i++){
+    let suivant=null;
+    u.searchParams.forEach(v=>{ if(!suivant&&/^https?:\/\//i.test(v)){ try{ suivant=new URL(v); }catch(e){} } });
+    if(!suivant||(pfDeLien(u)&&!pfDeLien(suivant))) break; u=suivant;
+  }
+  return /^https?:$/.test(u.protocol)?u:null;
+}
+// texte d'un nœud avec ses retours à la ligne (le document lu n'est pas affiché : innerText n'en met pas)
+const BLOCS_TEXTE=/^(P|DIV|TR|LI|TABLE|TBODY|H[1-6]|UL|OL|SECTION|ARTICLE|HEADER|FOOTER|BLOCKQUOTE|DD|DT|DL)$/;
+function texteDe(n){
+  if(!n) return "";
+  let t="";
+  (function parcourir(x){
+    for(const c of x.childNodes){
+      if(c.nodeType===3) t+=c.nodeValue.replace(/\s+/g," ");
+      else if(c.nodeType===1){
+        if(c.tagName==="BR"){ t+="\n"; continue; }
+        if(/^(SCRIPT|STYLE|HEAD)$/.test(c.tagName)) continue;
+        const bloc=BLOCS_TEXTE.test(c.tagName); if(bloc) t+="\n";
+        parcourir(c);
+        if(bloc) t+="\n"; else if(c.tagName==="TD"||c.tagName==="TH") t+=" ";
+      }
+    }
+  })(n.nodeType===1&&!n.childNodes.length?{childNodes:[]}:n);
+  return t.replace(/\u00a0/g," ").replace(/[ \t]+/g," ").replace(/ *\n */g,"\n").replace(/\n{2,}/g,"\n").trim();
+}
+function champMail(bloc,libs){
+  const r=new RegExp("(?:^|\\n|\\s)(?:"+libs+")\\s*[:：]\\s*([^\\n]{3,250})","i").exec(bloc); return r?r[1].trim():"";
+}
+function dateMail(bloc){
+  const r=/(?:date (?:et heure )?limite|remise des (?:offres|plis)|r[ée]ception des (?:offres|plis)|cl[ôo]ture|limite de r[ée]ponse)[^\n\d]{0,60}(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[^\n\d]{0,12}(\d{1,2})\s*[h:]\s*(\d{2})?)?/i.exec(bloc);
+  if(!r) return null;
+  const an=r[3].length===2?"20"+r[3]:r[3];
+  return parisVersIso(an+"-"+r[2].padStart(2,"0")+"-"+r[1].padStart(2,"0")+"T"+String(r[4]||"12").padStart(2,"0")+":"+(r[5]||"00"));
+}
+// Un mail (HTML ou texte) -> consultations trouvées
+function consultationsDuMail(mail){
+  const doc=mail.html?new DOMParser().parseFromString(mail.html,"text/html"):null;
+  const res=new Map();
+  const liens=[];
+  if(doc){
+    doc.querySelectorAll("script,style,head").forEach(n=>n.remove());
+    doc.querySelectorAll("a[href]").forEach(a=>{ const u=deballerLien(a.getAttribute("href")); const c=u&&pfDeLien(u); if(c) liens.push({a,c}); });
+  }else{
+    (mail.texte||"").replace(/https?:\/\/[^\s<>"')\]]+/g,href=>{ const u=deballerLien(href.replace(/[.,;]+$/,"")); const c=u&&pfDeLien(u); if(c) liens.push({a:null,c,href}); return href; });
+  }
+  const tousTextes=doc?texteDe(doc.body):(mail.texte||"");
+  const plusieurs=new Set(liens.map(l=>l.c.cle)).size>1;
+  for(const {a,c} of liens){
+    if(res.has(c.cle)){ const r=res.get(c.cle); if(a&&!r.titreLien){ const t=texteDe(a); if(t.length>=12&&!LIBELLES_GENERIQUES.test(t)) r.titre=r.titreLien=t; } continue; }
+    let bloc="";
+    if(a){
+      // plus grand bloc qui ne contient que cette consultation
+      let n=a;
+      while(n.parentElement&&n!==doc.body){
+        const p=n.parentElement;
+        const autres=liens.some(l=>l.c.cle!==c.cle&&l.a&&p.contains(l.a));
+        if(autres) break; n=p;
+      }
+      bloc=texteDe(n);
+    }else bloc=tousTextes;
+    if(bloc.length>3000) bloc=bloc.slice(0,3000);
+    const tl=a?texteDe(a):"";
+    let titre=tl.length>=12&&!LIBELLES_GENERIQUES.test(tl)?tl:"";
+    titre=titre||champMail(bloc,"objet|intitul[ée]|objet du march[ée]|titre|libell[ée]");
+    if(!titre&&!plusieurs) titre=(mail.sujet||"").replace(/^(tr|fw|fwd|re)\s*:\s*/i,"");
+    if(!titre) titre=(bloc.split("\n").find(l=>l.length>=20&&!/^https?:/i.test(l))||"").slice(0,200);
+    res.set(c.cle,{...c,titre:titre.slice(0,300),titreLien:titre===tl?tl:"",
+      acheteur:champMail(bloc,"acheteur|organisme|entit[ée] (?:publique|adjudicatrice)|pouvoir adjudicateur|nom de l.acheteur|ma[îi]tre d.ouvrage|collectivit[ée]").slice(0,200),
+      limite:dateMail(bloc),
+      reference:champMail(bloc,"r[ée]f[ée]rence|r[ée]f\\.|n° de la consultation").slice(0,80),
+      mail:{id:mail.id||"",sujet:mail.sujet||"",de:mail.de||"",nomDe:mail.nomDe||"",date:mail.date||""}});
+  }
+  // BOAMP : numéros d'avis cités sans lien (« Avis n° 26-123456 »)
+  if(/boamp|dila/i.test(mail.de||"")||/boamp/i.test(tousTextes.slice(0,500))){
+    for(const x of tousTextes.matchAll(/avis\s*(?:n°|no|num[ée]ro)?\s*:?\s*(\d{2}-\d{4,7})(?!\d)/gi)){
+      const cle="boamp:"+x[1]; if(res.has(cle)) continue;
+      res.set(cle,{pf:"BOAMP",cle,url:"https://www.boamp.fr/pages/avis/?q=idweb:%22"+x[1]+"%22",titre:"",acheteur:"",limite:null,reference:"",mail:{id:mail.id||"",sujet:mail.sujet||"",de:mail.de||"",nomDe:mail.nomDe||"",date:mail.date||""}});
+    }
+  }
+  return [...res.values()];
+}
+
+/* --- lecture d'un fichier .eml (MIME) --- */
+function decoderMot(s){
+  return (s||"").replace(/\?=\s+=\?/g,"?==?").replace(/=\?([^?]+)\?([bq])\?([^?]*)\?=/gi,(_,cs,enc,t)=>{
+    try{
+      const oct=enc.toLowerCase()==="b"?Uint8Array.from(atob(t),c=>c.charCodeAt(0)):Uint8Array.from(t.replace(/_/g," ").replace(/=([0-9a-f]{2})/gi,(m,h)=>String.fromCharCode(parseInt(h,16))),c=>c.charCodeAt(0));
+      return new TextDecoder(cs).decode(oct);
+    }catch(e){ return t; }
+  });
+}
+function lireEml(brut){
+  const parties={html:"",texte:""};
+  const entetes=t=>{ const o={}; t.replace(/\r?\n[ \t]+/g," ").split(/\r?\n/).forEach(l=>{ const i=l.indexOf(":"); if(i>0) o[l.slice(0,i).trim().toLowerCase()]=l.slice(i+1).trim(); }); return o; };
+  function partie(t){
+    const i=t.search(/\r?\n\r?\n/); if(i<0) return {h:{},corps:t};
+    return {h:entetes(t.slice(0,i)),corps:t.slice(i).replace(/^\r?\n\r?\n/,"")};
+  }
+  function corpsDecode(h,corps){
+    const enc=(h["content-transfer-encoding"]||"").toLowerCase(), cs=((h["content-type"]||"").match(/charset="?([^";]+)/i)||[])[1]||"utf-8";
+    let oct;
+    if(enc==="base64"){ try{ oct=Uint8Array.from(atob(corps.replace(/\s+/g,"")),c=>c.charCodeAt(0)); }catch(e){ return ""; } }
+    else if(enc==="quoted-printable"){ const s=corps.replace(/=\r?\n/g,"").replace(/=([0-9A-F]{2})/gi,(m,x)=>String.fromCharCode(parseInt(x,16))); oct=Uint8Array.from(s,c=>c.charCodeAt(0)&255); }
+    else oct=Uint8Array.from(corps,c=>c.charCodeAt(0)&255);
+    try{ return new TextDecoder(cs).decode(oct); }catch(e){ return new TextDecoder("utf-8").decode(oct); }
+  }
+  function parcourir(t,prof){
+    const {h,corps}=partie(t); const ct=(h["content-type"]||"text/plain").toLowerCase();
+    if(ct.startsWith("multipart/")&&prof<6){
+      const b=(h["content-type"].match(/boundary="?([^";]+)"?/i)||[])[1]; if(!b) return h;
+      corps.split("--"+b).slice(1).forEach(p=>{ if(!/^--/.test(p)) parcourir(p.replace(/^\r?\n/,""),prof+1); });
+    }else if(ct.startsWith("text/html")&&!parties.html) parties.html=corpsDecode(h,corps);
+    else if(ct.startsWith("text/plain")&&!parties.texte) parties.texte=corpsDecode(h,corps);
+    else if(ct.startsWith("message/rfc822")&&prof<6) parcourir(corps,prof+1);
+    return h;
+  }
+  const h=parcourir(brut,0);
+  const de=decoderMot(h.from||""), adr=(de.match(/<([^>]+)>/)||[,de])[1].trim();
+  let date=""; try{ date=h.date?new Date(h.date).toISOString():""; }catch(e){}
+  return {sujet:decoderMot(h.subject||""),de:adr,nomDe:de.replace(/<[^>]*>/,"").replace(/"/g,"").trim(),date,html:parties.html,texte:parties.texte};
+}
+
+/* --- Outlook / Microsoft 365 via Graph --- */
+async function alertesOutlook(depuisIso,etat){
+  if(!msCompte()&&!await msConnecter([...MS_SCOPES,...MAIL_SCOPES])) return null;
+  const jeton=await msJeton(true,MAIL_SCOPES); if(!jeton) return null;
+  const H={Authorization:"Bearer "+jeton};
+  const G="https://graph.microsoft.com/v1.0/me/messages";
+  let url=G+"?"+new URLSearchParams({"$filter":"receivedDateTime ge "+depuisIso,"$orderby":"receivedDateTime desc","$select":"id,subject,from,receivedDateTime","$top":"100"});
+  const retenus=[]; let lus=0, echanges=0;
+  for(let page=0;url&&page<15;page++){
+    const r=await fetch(url,{headers:H}); const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error("Lecture de la boîte impossible : "+((j.error&&j.error.message)||r.status));
+    for(const m of j.value||[]){
+      lus++;
+      const adr=((m.from&&m.from.emailAddress&&m.from.emailAddress.address)||"").toLowerCase();
+      const alerteParSujet=/alerte|veille|nouvelle?s? (?:consultation|annonce|avis)|avis (?:de march[ée]|d.appel)|appels? d.offres/i.test(m.subject||"");
+      if(!EXPEDITEURS_ALERTES.test(adr.split("@")[1]||"")&&!alerteParSujet) continue;
+      if(SUJETS_ECHANGES.test(m.subject||"")&&!/alerte|veille/i.test(m.subject||"")){ echanges++; continue; }
+      retenus.push(m);
+    }
+    etat("⏳ "+lus+" mails parcourus, "+retenus.length+" alertes possibles…");
+    url=j["@odata.nextLink"]||null;
+  }
+  const mails=[];
+  for(const [i,m] of retenus.slice(0,200).entries()){
+    etat("⏳ Lecture des alertes : "+(i+1)+" / "+Math.min(retenus.length,200)+"…");
+    const r=await fetch(G+"/"+encodeURIComponent(m.id)+"?$select=id,subject,from,receivedDateTime,body",{headers:{...H,Prefer:'outlook.body-content-type="html"'}});
+    if(!r.ok) continue;
+    const j=await r.json().catch(()=>null); if(!j) continue;
+    const ea=(j.from&&j.from.emailAddress)||{};
+    mails.push({id:j.id,sujet:j.subject||"",de:ea.address||"",nomDe:ea.name||"",date:j.receivedDateTime||"",html:j.body&&j.body.contentType==="html"?j.body.content:"",texte:j.body&&j.body.contentType!=="html"?j.body.content:""});
+  }
+  return {mails,lus,echanges};
+}
+
+/* --- autres messageries (IMAP) : Gmail, OVH, Orange, Free, Yahoo, iCloud… ---
+   Lecture faite par le serveur Vigie, qui ne garde rien. Le mot de passe reste dans ce navigateur
+   (seulement si « se souvenir » est coché). */
+const CLE_IMAP="vigie.imap.v1";
+const MESSAGERIES=[
+  ["gmail","Gmail","imap.gmail.com",/@(gmail|googlemail)\.com$/i],
+  ["yahoo","Yahoo","imap.mail.yahoo.com",/@yahoo\./i],
+  ["icloud","iCloud","imap.mail.me.com",/@(icloud|me|mac)\.com$/i],
+  ["orange","Orange / Wanadoo","imap.orange.fr",/@(orange|wanadoo)\.fr$/i],
+  ["free","Free","imap.free.fr",/@free\.fr$/i],
+  ["sfr","SFR","imap.sfr.fr",/@(sfr|neuf|cegetel)\.fr$/i],
+  ["laposte","La Poste","imap.laposte.net",/@laposte\.net$/i],
+  ["ovh","OVH (nom de domaine d'entreprise)","ssl0.ovh.net",null],
+  ["ionos","IONOS / 1&1","imap.ionos.fr",null],
+  ["autre","Autre (indiquer le serveur IMAP)","",null],
+];
+async function alertesImap(cfg,depuisIso){
+  const rep=await fetch(SERVEUR_DCE+"/mail/imap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hote:cfg.hote,port:993,utilisateur:cfg.utilisateur,motdepasse:cfg.motdepasse,depuis:depuisIso}),signal:AbortSignal.timeout(170000)});
+  const j=await rep.json().catch(()=>({ok:false,message:"Réponse illisible du serveur ("+rep.status+")"}));
+  if(!j.ok) throw new Error(j.message||"Lecture de la boîte impossible");
+  return {mails:j.mails||[],lus:j.parcourus||0,echanges:j.echanges||0};
+}
+
+/* --- ajout automatique d'un marché trouvé dans une alerte --- */
+function dejaDansVigie(c){
+  const id=c.cle.startsWith("boamp:")?c.cle.slice(6):null;
+  if(id&&(manuels[id]||statuts[id])) return true;
+  return Object.values(manuels).some(m=>m.lienSaisi===c.url||(m.urls||[]).includes(c.url)||(m.cleMail&&m.cleMail===c.cle));
+}
+const NOMS_PLATEFORMES=/boamp|place|maximilien|aws|achatpublic|e-marchespublics|marches? ?publics|plateforme|ne ?pas ?r[ée]pondre|no-?reply|alerte|veille|dila/i;
+async function ajouterDepuisAlerte(c){
+  let base=null, fiche=null;
+  const avis=await avisBoampParLien(c.url).catch(()=>null);
+  if(avis){
+    if(manuels[avis.idweb]||statuts[avis.idweb]) return {deja:true,texte:"Déjà dans Vigie (avis BOAMP n° "+avis.idweb+")"};
+    base=avis;
+  }else if(c.pf!=="BOAMP"){
+    const r=await ficheParServeur(c.url).catch(e=>({ok:false,message:e.name==="TimeoutError"?"Le serveur Vigie ne répond pas.":e.message}));
+    if(r.ok) fiche=r.fiche||{};
+  }
+  const m=base?{...base}:squeletteMarche();
+  if(!base){
+    const f=fiche||{};
+    if(f.cpv) m.cpv=f.cpv;
+    const nomExp=c.mail&&c.mail.nomDe&&!NOMS_PLATEFORMES.test(c.mail.nomDe)?c.mail.nomDe:"";
+    const dep=String(f.departement||"").match(/^(\d{2,3}|2[ab])\b/i);
+    Object.assign(m,{
+      objet:f.objet||c.titre||"", acheteur:f.acheteur||c.acheteur||nomExp||"", limite:f.limite||c.limite||null,
+      types:f.type?[f.type]:[], deps:dep?[dep[1].toUpperCase()]:[], procedure:normProcedure(f.procedure||""),
+      villeAcheteur:f.villeAcheteur||"", lieu:f.lieu||"", refAcheteur:f.reference||c.reference||"", accordCadre:!!f.accordCadre,
+      description:(f.description||"").slice(0,1500),
+    });
+  }
+  const manque=[!m.objet&&"l'intitulé",!m.acheteur&&"l'acheteur",!m.limite&&"la date limite"].filter(Boolean);
+  if(!m.objet) m.objet="Consultation "+c.pf+(c.reference?" "+c.reference:"")+" (à compléter)";
+  if(!m.acheteur) m.acheteur="Acheteur à compléter";
+  Object.assign(m,{manuel:true,lienSaisi:c.url,ajoute:new Date().toISOString(),cleMail:c.cle,viaMail:c.mail?{sujet:c.mail.sujet,de:c.mail.de,date:c.mail.date}:null});
+  if(!base&&fiche&&fiche.urlDocs) m.urls=[fiche.urlDocs];
+  poserLien(m,c.pf==="BOAMP"&&base?(base.urlAvis||c.url):c.url,base);
+  manuels[m.idweb]=m; sauverManuels();
+  return {m,manque,source:base?"l'avis BOAMP n° "+base.idweb:fiche?"la page de la consultation":"le mail d'alerte"};
+}
+
+function ouvrirImportMail(){
+  const memo=lire(CLE_MAIL,{dernier:null,ignores:{}});
+  const fermer=()=>{ fond.remove(); document.removeEventListener("keydown",echap); };
+  const echap=e=>{ if(e.key==="Escape"&&!occupe) fermer(); };
+  let occupe=false, trouves=[];
+  const etat=el("p",{class:"pn-etat"});
+  const periode=el("select",{},
+    memo.dernier?el("option",{value:"dernier",text:"Depuis le dernier import ("+new Date(memo.dernier).toLocaleDateString("fr-FR")+")"}):null,
+    el("option",{value:"7",text:"7 derniers jours"}),el("option",{value:"14",text:"14 derniers jours"}),el("option",{value:"30",text:"30 derniers jours"}),el("option",{value:"90",text:"3 derniers mois"}));
+  const bOutlook=el("button",{class:"btn btn-plein",type:"button"},"Se connecter et chercher dans Outlook");
+  const imap=lire(CLE_IMAP,{type:"gmail",hote:"imap.gmail.com",utilisateur:"",motdepasse:"",souvenir:false});
+  const iType=el("select",{},MESSAGERIES.map(([v,n])=>el("option",{value:v,text:n})));
+  const iAdr=el("input",{type:"text",placeholder:"adresse mail (ex. prenom.nom@gmail.com)",autocomplete:"username"});
+  const iHote=el("input",{type:"text",placeholder:"serveur IMAP (ex. imap.mondomaine.fr)"});
+  const iMdp=el("input",{type:"password",placeholder:"mot de passe d'application",autocomplete:"current-password"});
+  const iSouv=el("input",{type:"checkbox"});
+  const bImap=el("button",{class:"btn btn-plein",type:"button"},"Chercher dans cette boîte");
+  iType.value=imap.type||"gmail"; iAdr.value=imap.utilisateur||""; iHote.value=imap.hote||""; iMdp.value=imap.motdepasse||""; iSouv.checked=!!imap.souvenir;
+  const majType=()=>{ const d=MESSAGERIES.find(x=>x[0]===iType.value); if(d&&d[2]) iHote.value=d[2]; iHote.hidden=iType.value!=="autre"&&iType.value!=="ovh"&&iType.value!=="ionos"; iMdp.placeholder=iType.value==="gmail"||iType.value==="yahoo"||iType.value==="icloud"?"mot de passe d'application (16 caractères)":"mot de passe de la boîte mail"; };
+  iType.onchange=majType;
+  iAdr.addEventListener("change",()=>{ const d=MESSAGERIES.find(x=>x[3]&&x[3].test(iAdr.value.trim())); if(d){ iType.value=d[0]; majType(); } });
+  majType();
+  bImap.onclick=async()=>{
+    if(occupe) return;
+    const cfg={type:iType.value,hote:iHote.value.trim(),utilisateur:iAdr.value.trim(),motdepasse:iMdp.value,souvenir:iSouv.checked};
+    if(!cfg.utilisateur||!cfg.motdepasse||!cfg.hote){ dire("Indiquez l'adresse, le mot de passe"+(iHote.hidden?"":" et le serveur IMAP")+".","ko"); return; }
+    ecrire(CLE_IMAP,{...cfg,motdepasse:cfg.souvenir?cfg.motdepasse:""});
+    occupe=true; bImap.disabled=true;
+    const jours=periode.value==="dernier"?null:+periode.value;
+    const depuis=jours?new Date(Date.now()-jours*864e5):new Date(new Date(memo.dernier).getTime()-864e5);
+    try{
+      dire("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
+      const r=await alertesImap(cfg,depuis.toISOString());
+      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
+    }catch(e){ dire(e.name==="TimeoutError"?"La messagerie met trop de temps à répondre : réessayez avec une période plus courte.":e.message,"ko"); }
+    finally{ occupe=false; bImap.disabled=false; }
+  };
+  const zone=el("div",{class:"zone-colle",tabindex:"0",contenteditable:"true",role:"textbox","aria-label":"Collez ici le mail d'alerte"},"Collez ici le mail d'alerte (dans le mail : Ctrl+A puis Ctrl+C), ou déposez des fichiers .eml");
+  const fichiers=el("input",{type:"file",accept:".eml,message/rfc822",multiple:true,hidden:true});
+  const bFichiers=el("button",{class:"btn",type:"button",onclick:()=>fichiers.click()},"Choisir des fichiers .eml");
+  const liste=el("ul",{class:"trouves"});
+  const bTout=el("button",{class:"btn",type:"button",hidden:true},"Tout cocher / décocher");
+  const bAjout=el("button",{class:"btn btn-plein",type:"button",hidden:true},"Ajouter les marchés cochés");
+  const dire=(t,cls)=>{ etat.className="pn-etat "+(cls||""); etat.textContent=t; };
+
+  function afficher(){
+    liste.innerHTML="";
+    trouves.forEach(c=>{
+      const deja=dejaDansVigie(c);
+      c.coche=c.coche!=null?c.coche:!deja&&!memo.ignores[c.cle];
+      const cb=el("input",{type:"checkbox","aria-label":"Ajouter ce marché"}); cb.checked=c.coche&&!deja; cb.disabled=deja; cb.onchange=()=>{ c.coche=cb.checked; compter(); };
+      const md=c.mail&&c.mail.date?new Date(c.mail.date).toLocaleDateString("fr-FR"):"";
+      const li=el("li",{class:deja?"deja":""},cb,
+        el("span",{class:"t"},c.titre||"(intitulé lu sur la page à l'ajout)"),
+        el("span",{class:"pf",text:c.pf}),
+        el("span",{class:"s"},[c.acheteur,c.limite?"limite "+new Date(c.limite).toLocaleDateString("fr-FR"):"",c.mail&&c.mail.sujet?"mail « "+c.mail.sujet.slice(0,80)+" »"+(md?" du "+md:""):""].filter(Boolean).join(" · ")+" · ",el("a",{href:c.url,target:"_blank",rel:"noopener",text:"voir"})),
+        deja?el("span",{class:"res",text:"Déjà dans Vigie"}):null);
+      c.li=li; c.cb=cb; liste.append(li);
+    });
+    bTout.hidden=bAjout.hidden=!trouves.some(c=>!dejaDansVigie(c));
+    compter();
+  }
+  function compter(){ const n=trouves.filter(c=>c.coche&&!c.cb.disabled).length; bAjout.textContent=n?"Ajouter "+n+" marché"+(n>1?"s":""):"Ajouter les marchés cochés"; bAjout.disabled=!n; }
+  function ingerer(mails,info){
+    const avant=trouves.length, cles=new Set(trouves.map(c=>c.cle));
+    for(const m of mails) for(const c of consultationsDuMail(m)) if(!cles.has(c.cle)){ cles.add(c.cle); trouves.push(c); }
+    trouves.sort((a,b)=>(b.mail&&b.mail.date||"").localeCompare(a.mail&&a.mail.date||""));
+    afficher();
+    const n=trouves.length-avant, nd=trouves.filter(c=>!dejaDansVigie(c)).length;
+    if(n&&!nd){ dire("Les "+n+" consultations trouvées"+(info?" ("+info+")":"")+" sont déjà dans Vigie.","ok"); return; }
+    dire(n?"✓ "+n+" consultation"+(n>1?"s":"")+" trouvée"+(n>1?"s":"")+(info?" ("+info+")":"")+(nd<trouves.length?", dont "+(trouves.length-nd)+" déjà dans Vigie":"")+". Décochez celles qui ne vous intéressent pas, puis ajoutez."
+      :"Aucune nouvelle consultation trouvée"+(info?" ("+info+")":"")+". Si une alerte n'est pas reconnue, collez-la ci-dessous ou ajoutez le marché par son lien.",n?"ok":"ko");
+  }
+  bOutlook.onclick=async()=>{
+    if(occupe) return; occupe=true; bOutlook.disabled=true;
+    const jours=periode.value==="dernier"?null:+periode.value;
+    const depuis=jours?new Date(Date.now()-jours*864e5):new Date(new Date(memo.dernier).getTime()-864e5);
+    try{
+      dire("⏳ Connexion à Outlook…");
+      const r=await alertesOutlook(depuis.toISOString(),t=>dire(t));
+      if(!r){ dire("Connexion à Outlook annulée.","ko"); return; }
+      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
+    }catch(e){ dire(e.message+(/Mail\.Read|consent|AADSTS65001|Access is denied|403/i.test(e.message)?" — l'autorisation de lire les mails n'a pas été accordée.":""),"ko"); }
+    finally{ occupe=false; bOutlook.disabled=false; }
+  };
+  zone.addEventListener("focus",()=>{ if(!zone.dataset.vide){ zone.dataset.vide="1"; zone.textContent=""; } });
+  zone.addEventListener("paste",e=>{
+    e.preventDefault();
+    const html=e.clipboardData.getData("text/html"), texte=e.clipboardData.getData("text/plain");
+    zone.textContent="Mail collé ✓ — vous pouvez en coller un autre.";  zone.blur(); delete zone.dataset.vide;
+    ingerer([{html,texte:html?"":texte,sujet:"",de:"",date:new Date().toISOString()}],"mail collé");
+  });
+  zone.addEventListener("keydown",e=>{ if(!(e.ctrlKey||e.metaKey)&&e.key.length===1) e.preventDefault(); });
+  zone.addEventListener("drop",async e=>{ e.preventDefault(); zone.classList.remove("survol"); await lireFichiers(e.dataTransfer.files); });
+  zone.addEventListener("dragover",e=>{ e.preventDefault(); zone.classList.add("survol"); });
+  zone.addEventListener("dragleave",()=>zone.classList.remove("survol"));
+  fichiers.onchange=async()=>{ await lireFichiers(fichiers.files); fichiers.value=""; };
+  async function lireFichiers(fl){
+    const mails=[]; let msg=0;
+    for(const f of fl){ if(/\.msg$/i.test(f.name)){ msg++; continue; } try{ mails.push(lireEml(await f.text())); }catch(e){} }
+    if(msg&&!mails.length){ dire("Les fichiers .msg d'Outlook ne sont pas lisibles : utilisez « Chercher dans Outlook » ou copiez-collez le mail.","ko"); return; }
+    ingerer(mails,mails.length+" fichier"+(mails.length>1?"s":""));
+  }
+  bTout.onclick=()=>{ const libres=trouves.filter(c=>!c.cb.disabled); const v=!libres.every(c=>c.coche); libres.forEach(c=>{ c.coche=v; c.cb.checked=v; }); compter(); };
+  bAjout.onclick=async()=>{
+    if(occupe) return; occupe=true; bAjout.disabled=bOutlook.disabled=true;
+    const choix=trouves.filter(c=>c.coche&&!c.cb.disabled);
+    trouves.filter(c=>!c.coche&&!c.cb.disabled).forEach(c=>memo.ignores[c.cle]=1);
+    const cles=Object.keys(memo.ignores); if(cles.length>2000) cles.slice(0,cles.length-2000).forEach(k=>delete memo.ignores[k]);
+    ecrire(CLE_MAIL,memo);
+    let ok=0, acompleter=0;
+    for(const [i,c] of choix.entries()){
+      dire("⏳ Ajout "+(i+1)+" / "+choix.length+" : lecture de la consultation (jusqu'à une minute si le serveur Vigie était en veille)…");
+      c.li.className="encours"; c.cb.disabled=true;
+      const res=el("span",{class:"res",text:"⏳ en cours…"}); c.li.append(res);
+      try{
+        if(dejaDansVigie(c)){ c.li.className="deja"; res.textContent="Déjà dans Vigie"; continue; }
+        const r=await ajouterDepuisAlerte(c);
+        if(r.deja){ c.li.className="deja"; res.textContent=r.texte; continue; }
+        ok++;
+        if(r.manque.length){ acompleter++; c.li.className="ko"; res.className="res ko"; res.textContent="Ajouté (d'après "+r.source+") — à compléter : "+r.manque.join(", ")+" (bouton Modifier sur l'encart)"; }
+        else{ c.li.className="ok"; res.className="res ok"; res.textContent="✓ Ajouté d'après "+r.source+" : « "+r.m.objet.slice(0,90)+" »"; }
+        c.li.querySelector(".t").textContent=r.m.objet;
+      }catch(e){ c.li.className="ko"; res.className="res ko"; res.textContent="Échec : "+e.message; }
+    }
+    afficherManuels();
+    if(!$("#vue-suivi").hidden) afficherSuivi();
+    dire(ok?"✓ "+ok+" marché"+(ok>1?"s":"")+" ajouté"+(ok>1?"s":"")+" en tête de la recherche"+(acompleter?", dont "+acompleter+" à compléter":"")+".":"Aucun marché ajouté.",ok?"ok":"ko");
+    occupe=false; bOutlook.disabled=false; compter();
+  };
+  const boite=el("div",{class:"captcha panneau",role:"dialog","aria-modal":"true","aria-label":"Importer les alertes mail"},
+    el("h3",{text:"Importer les alertes mail des plateformes"}),
+    el("p",{class:"note",text:"Vigie repère dans les alertes de BOAMP, PLACE, Maximilien, AWS-Achat, achatpublic, e-marchespublics… les liens des consultations, puis les ajoute comme « Ajouter un marché par son lien ». Avec Outlook, vos mails sont lus par votre navigateur ; avec Gmail et les autres messageries, le serveur Vigie les lit le temps de l'import, sans rien garder."}),
+    el("div",{class:"ligne"},el("span",{class:"note",text:"Période :"}),periode,el("a",{href:"aide/connexions.html#mail",target:"_blank",rel:"noopener",class:"btn"},"Procédure pas à pas")),
+    msConfigure()?el("div",{class:"bloc"},
+      el("h4",{text:"Outlook, Hotmail, Microsoft 365"}),
+      el("div",{class:"ligne"},bOutlook),
+      el("p",{class:"note",text:"La première fois, Microsoft vous demande d'autoriser Vigie à lire vos mails (lecture seule)."})):null,
+    el("div",{class:"bloc"},
+      el("h4",{text:"Gmail et autres messageries (Orange, Free, OVH, Yahoo, iCloud…)"}),
+      el("div",{class:"ligne"},iType,iAdr),
+      el("div",{class:"ligne"},iHote,iMdp),
+      el("label",{class:"note",style:"display:flex;gap:6px;align-items:center"},iSouv,"Se souvenir du mot de passe sur cet appareil"),
+      el("div",{class:"ligne"},bImap),
+      el("p",{class:"note",text:"Gmail, Yahoo et iCloud demandent un « mot de passe d'application » (pas votre mot de passe habituel) : voir la procédure pas à pas. Le serveur Vigie lit la boîte en lecture seule et ne garde ni le mot de passe ni les mails."})),
+    el("div",{class:"bloc"},
+      el("h4",{text:"Ou : copier-coller d'un mail d'alerte"}),
+      zone, el("div",{class:"ligne"},bFichiers,fichiers)),
+    etat, liste,
+    el("div",{class:"actions"},bTout,el("button",{class:"btn",type:"button",onclick:()=>{ if(!occupe) fermer(); }},"Fermer"),bAjout));
+  const fond=el("div",{class:"captcha-fond"},boite);
+  fond.addEventListener("click",e=>{ if(e.target===fond&&!occupe) fermer(); });
+  document.addEventListener("keydown",echap);
+  document.body.append(fond);
+  if(msConfigure()) msInit().catch(()=>{});
+}
+
 /* ---------- Démarrage ---------- */
 let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
@@ -2143,6 +2671,9 @@ function init(){
   };
   const bt=$("#btnTableau"); if(bt) bt.onclick=()=>synchroTableau(true);
   $("#btnAjout").onclick=()=>ouvrirAjout(null);
+  $("#btnOd").onclick=()=>ouvrirOneDrive();
+  $("#btnMail").onclick=()=>ouvrirImportMail();
+  majBoutonOd();
   majBlocTableau();
   // à l'ouverture : relecture du tableau Excel (décisions « Je ne réponds pas »), sans rien demander
   setTimeout(()=>{ (msConfigure()?msInit().catch(()=>{}):Promise.resolve()).then(()=>synchroTableau(false)); },1500);
