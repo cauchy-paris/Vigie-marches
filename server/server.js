@@ -8,6 +8,7 @@ const { textePdf, analyserTexte } = require("./regles");
 const onedrive = require("./onedrive");
 const { extraireFiche } = require("./fiche");
 const { lireAlertes } = require("./mail");
+const { routeCompte, compteDe } = require("./comptes");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -299,7 +300,7 @@ process.on("unhandledRejection", e => console.log("Promesse rejetée", e && e.st
 
 
 /* ---------- analyse du RC par l'IA ---------- */
-const ORIGINES = new Set(["https://vigie-marches.onrender.com", "null", ...(process.env.ORIGINES_TEST || "").split(",").filter(Boolean)]);
+const ORIGINES = new Set(["https://vigie-marches.onrender.com", ...(process.env.ORIGINES_TEST || "").split(",").filter(Boolean)]);
 const analyses = new Map(); // cache : clé -> réponse
 const compteAnalyses = new Map(); let jourAnalyses = "", totalJour = 0;
 function quotaAnalyse(ip) {
@@ -652,15 +653,47 @@ async function routeMailImap(req, res) {
   }
 }
 
+// adresse du serveur lui-même (formulaire CAPTCHA de ses propres pages)
+const SOI = (process.env.RENDER_EXTERNAL_URL || "https://vigie-marches-dce.onrender.com").replace(/\/$/, "");
+const SITE = "https://vigie-marches.onrender.com";
+function pageConnexion(res) {
+  res.writeHead(401, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Connexion requise</title>
+<body style="font:16px system-ui;max-width:640px;margin:40px auto;padding:0 16px;color:#14203d">
+<h1 style="color:#16337a;font-size:22px">Connexion à Vigie requise</h1>
+<p>Ce lien ne fonctionne que pour un utilisateur connecté à Vigie Marchés. Ouvrez Vigie, connectez-vous, puis cliquez de nouveau sur le bouton.</p>
+<p><a href="${SITE}" style="display:inline-block;background:#16337a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Ouvrir Vigie Marchés</a></p></body>`);
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
-  // l'appli peut récupérer le DCE pour le ranger elle-même dans le dossier de réponse
-  if ((u.pathname === "/dce" || u.pathname === "/dce/captcha") && req.headers.origin && ORIGINES.has(req.headers.origin)) {
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin);
-    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Length");
+  const o = req.headers.origin;
+  if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", ...(o && ORIGINES.has(o) ? { "Access-Control-Allow-Origin": o } : {}) }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  // Seul le site Vigie (et les pages du serveur lui-même) peut appeler le serveur depuis un navigateur.
+  if (o && !ORIGINES.has(o) && o !== SOI) { res.writeHead(403, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Origine non autorisée"); }
+  if (o && ORIGINES.has(o)) {
+    res.setHeader("Access-Control-Allow-Origin", o);
+    res.setHeader("Access-Control-Expose-Headers", "Content-Disposition, Content-Length, X-Vigie-Connexion");
     res.setHeader("Vary", "Origin");
   }
-  if (u.pathname === "/" || u.pathname === "/sante") { res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" }); return res.end("Vigie Marchés : serveur DCE en service"); }
+  if (req.method === "OPTIONS") {
+    if (o && ORIGINES.has(o)) res.writeHead(204, { "Access-Control-Allow-Methods": "GET, POST", "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Drive, X-Dossier, X-Nom, X-Vigie", "Access-Control-Max-Age": "86400" });
+    else res.writeHead(204);
+    return res.end();
+  }
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (u.pathname.startsWith("/compte/")) return routeCompte(req, res, u, { json, lireCorps, ip }).catch(e => { console.log("compte", e.stack); if (!res.headersSent) json(res, 500, { message: "Erreur interne" }); });
+  // Toutes les autres routes sont réservées aux utilisateurs connectés à Vigie.
+  // /dce/captcha n'a pas besoin du jeton : le jeton du CAPTCHA (10 min) n'est remis qu'à un utilisateur connecté.
+  if (u.pathname !== "/dce/captcha") {
+    req.compte = compteDe(req, u);
+    if (!req.compte) {
+      if (!o) return pageConnexion(res); // lien ouvert dans un onglet
+      res.setHeader("X-Vigie-Connexion", "1");
+      return json(res, 401, { erreur: "compte", ok: false, message: "Session Vigie expirée : reconnectez-vous." });
+    }
+    if (u.pathname === "/diagnostic" && req.compte.r !== "admin") return json(res, 403, { message: "Réservé à l'administrateur." });
+  }
   if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
@@ -709,7 +742,6 @@ http.createServer(async (req, res) => {
   try { const o = new URL(origine); if (o.protocol !== "https:" && !process.env.HOTE_TEST) throw 0; hote = o.hostname; } catch (e) { return pageErreur(res, 400, "Adresse de plateforme invalide."); }
   const retour = origine + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + encodeURIComponent(id) + "&orgAcronyme=" + encodeURIComponent(org);
   if (!hoteAutorise(hote)) return pageErreur(res, 400, "Cette plateforme n'est pas prise en charge pour le téléchargement automatique.", retour);
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
   if (tropDeDemandes(ip)) return pageErreur(res, 429, "Trop de téléchargements en peu de temps. Réessayez dans quelques minutes.", retour);
   const base = new URL(origine).origin;
   if (!id && (ref || objet)) {

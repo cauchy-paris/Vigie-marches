@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vigie Marchés · Comptes et mot de passe</title>
+<style>
+:root{--bleu:#16337a;--bleu-fonce:#0d2257;--bleu-clair:#e8eefb;--rouge:#d22d39;--rouge-clair:#fdeced;--fond:#f3f6fc;--encre:#14203d;--gris:#5b6785;--trait:#d5ddef;--vert:#1c7c4d;--vert-clair:#e3f4ea}
+*{box-sizing:border-box}
+body{margin:0;background:var(--fond);color:var(--encre);font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+header{background:var(--bleu);color:#fff;border-bottom:4px solid var(--rouge);padding:18px 16px}
+header div{max-width:860px;margin:0 auto}
+header h1{margin:0;font-size:22px}
+header p{margin:4px 0 0;opacity:.85;font-size:14px}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+nav{background:#fff;border:1px solid var(--trait);border-radius:12px;padding:12px 16px;margin-bottom:18px}
+nav a{display:inline-block;margin:2px 10px 2px 0}
+section{background:#fff;border:1px solid var(--trait);border-radius:12px;padding:6px 20px 16px;margin-bottom:18px}
+h2{color:var(--bleu);font-size:19px;border-bottom:2px solid var(--rouge);padding-bottom:6px}
+h3{color:var(--bleu-fonce);font-size:16px;margin:20px 0 6px}
+ol{padding-left:22px}
+li{margin:4px 0}
+a{color:#3a5fc4}
+.bouton{display:inline-block;background:var(--bleu);color:#fff;border-radius:6px;padding:0 7px;font-weight:600;font-size:13.5px;white-space:nowrap}
+.bouton.rouge{background:var(--rouge)}
+.astuce{background:var(--bleu-clair);border-left:4px solid var(--bleu);border-radius:6px;padding:8px 12px;margin:10px 0}
+.attention{background:var(--rouge-clair);border-left:4px solid var(--rouge);border-radius:6px;padding:8px 12px;margin:10px 0}
+.ok{background:var(--vert-clair);border-left:4px solid var(--vert);border-radius:6px;padding:8px 12px;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{border:1px solid var(--trait);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:var(--bleu-clair)}
+code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5px}
+@media print{header{background:#fff;color:var(--bleu)}nav{display:none}section{break-inside:avoid-page}}
+</style>
+</head>
+<body>
+<header><div>
+  <h1>Comptes et mot de passe</h1>
+  <p>Vigie Marchés est réservé aux personnes à qui l'administrateur a créé un compte. Cette page explique l'installation (une seule fois) et la gestion des comptes.</p>
+</div></header>
+<main>
+<nav><a href="#installation">1. Installation</a> <a href="#sauvegarde">2. Sauvegarde automatique</a> <a href="#comptes">3. Créer les comptes</a> <a href="#utilisateur">4. Pour chaque utilisateur</a> <a href="#securite">5. Ce qui est protégé</a></nav>
+
+<section id="installation">
+<h2>1. Installation : créer le compte administrateur</h2>
+<p>À faire une seule fois, par l'administrateur, juste après la mise en ligne.</p>
+<ol>
+<li>Ouvrez <a href="https://dashboard.render.com" target="_blank" rel="noopener">dashboard.render.com</a> et cliquez sur le service <code>vigie-marches-dce</code>.</li>
+<li>Menu de gauche <b>Environment</b> : repérez la variable <code>VIGIE_CODE_INSTALLATION</code>, cliquez sur l'œil pour l'afficher, puis copiez sa valeur.</li>
+<li>Ouvrez <a href="https://vigie-marches.onrender.com" target="_blank" rel="noopener">Vigie Marchés</a> : l'écran « Installation » s'affiche.</li>
+<li>Collez le code, puis indiquez votre nom, votre adresse mail et un mot de passe d'au moins 10 caractères. Cliquez sur <span class="bouton">Créer le compte administrateur</span>.</li>
+</ol>
+<p class="astuce">Le serveur gratuit s'endort après 15 minutes sans visite : la première connexion de la journée peut prendre jusqu'à une minute.</p>
+</section>
+
+<section id="sauvegarde">
+<h2>2. Sauvegarde automatique des comptes (recommandé)</h2>
+<p>Les comptes sont gardés dans la variable <code>VIGIE_COMPTES</code> du service Render (les mots de passe y sont chiffrés de façon irréversible). Pour que Vigie la mette à jour tout seul à chaque création de compte ou changement de mot de passe, donnez-lui une clé d'API Render (gratuite) :</p>
+<ol>
+<li>Sur Render, cliquez sur votre avatar en haut à droite, puis <b>Account Settings</b>, rubrique <b>API Keys</b>, bouton <b>Create API Key</b>. Nommez-la « Vigie » et copiez la clé.</li>
+<li>Revenez sur le service <code>vigie-marches-dce</code>, menu <b>Environment</b>. Remplissez la variable <code>RENDER_API_KEY</code> (ou ajoutez-la avec <b>Add Environment Variable</b>) avec la clé copiée.</li>
+<li>Cliquez sur <b>Save, rebuild, and deploy</b>. Attendez environ deux minutes.</li>
+</ol>
+<p class="attention">Sans cette clé, chaque changement de compte affiche un texte à copier vous-même dans la variable <code>VIGIE_COMPTES</code> (même écran Environment, puis <b>Save, rebuild, and deploy</b>). Si vous l'oubliez, le changement est perdu au prochain redémarrage du serveur, y compris le compte administrateur créé à l'installation (il suffit alors de refaire l'installation).</p>
+<p class="astuce">Avec la clé, le serveur redémarre de lui-même une minute après chaque changement de compte, pour l'enregistrer. Vigie reste utilisable pendant ce temps.</p>
+</section>
+
+<section id="comptes">
+<h2>3. Créer les comptes des utilisateurs</h2>
+<ol>
+<li>Dans Vigie, cliquez sur le bouton avec votre prénom en haut à droite, puis <b>Gérer les comptes</b>.</li>
+<li>Saisissez le nom et l'adresse mail de la personne, puis <span class="bouton">Créer le compte</span>. Cochez « Administrateur » seulement si elle doit pouvoir gérer les comptes.</li>
+<li>Vigie affiche un <b>mot de passe provisoire</b> : transmettez-le à la personne (par téléphone ou SMS de préférence). Il ne sera plus affiché ensuite.</li>
+</ol>
+<p>Dans la même fenêtre : <b>Nouveau mot de passe</b> (mot de passe oublié : un nouveau provisoire est créé et l'ancien ne marche plus) et <b>Supprimer</b> (la personne est déconnectée aussitôt de tous ses appareils).</p>
+</section>
+
+<section id="utilisateur">
+<h2>4. Pour chaque utilisateur</h2>
+<ol>
+<li>Ouvrez Vigie, saisissez votre adresse mail et le mot de passe provisoire reçu.</li>
+<li>Vigie demande aussitôt de choisir votre propre mot de passe (10 caractères minimum).</li>
+<li>Vous restez connecté 30 jours sur ce navigateur. Bouton avec votre prénom : <b>Changer mon mot de passe</b> et <b>Se déconnecter</b>.</li>
+</ol>
+<p class="ok">Vos marchés suivis, filtres et connexions (drive, messagerie) restent dans votre navigateur, comme avant : chacun garde les siens.</p>
+</section>
+
+<section id="securite">
+<h2>5. Ce qui est protégé</h2>
+<ul>
+<li>Le serveur <code>vigie-marches-dce</code> (DCE, RC, CAPTCHA, analyse du RC, dépôt dans le drive, lecture des alertes mail, ajout par lien) ne répond plus qu'aux utilisateurs connectés, et seulement depuis le site Vigie.</li>
+<li>Le site affiche l'écran de connexion tant qu'on n'est pas connecté. Le code de la page reste public (il est sur GitHub), mais il ne contient aucune donnée ni aucun accès.</li>
+<li>Après 8 mauvais mots de passe en 15 minutes, les essais sont bloqués 15 minutes.</li>
+<li>Changer son mot de passe déconnecte ses autres appareils.</li>
+</ul>
+</section>
+</main>
+</body>
+</html>

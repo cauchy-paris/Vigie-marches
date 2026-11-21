@@ -538,6 +538,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="comptes.js"></script>
 <script>
 "use strict";
 /* ====================================================================
@@ -3380,7 +3381,7 @@ function initDecp(){
   document.querySelector('.onglet[data-vue="attribues"]').addEventListener("click",()=>{ if(!dLance){ dLance=true; rechercherDecp(0); } });
 }
 if(window.opener&&window.opener!==window&&/[#&?](code|error)=/.test(location.hash+location.search)){ document.body.innerHTML="<p style='font:16px system-ui;padding:24px'>Connexion en cours…</p>"; }
-else init();
+else Comptes.demarrer(init);
 </script>
 </body>
 </html>
