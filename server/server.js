@@ -7,6 +7,7 @@ const { extraire, extraireTous, analyser } = require("./analyse");
 const { textePdf, analyserTexte } = require("./regles");
 const onedrive = require("./onedrive");
 const { extraireFiche } = require("./fiche");
+const { lireAlertes } = require("./mail");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -608,6 +609,37 @@ async function routeFiche(req, res, u) {
   return json(res, 200, { ok: true, url: url.toString(), fiche }, autorise);
 }
 
+/* ---------- /mail/imap : alertes des plateformes dans une boîte IMAP ----------
+   Identifiants reçus à chaque demande, jamais écrits ni journalisés ; réservé à l'appli Vigie. */
+const IMAP_PORTS = new Set([993]);
+const derniersMail = new Map();
+async function routeMailImap(req, res) {
+  const o = req.headers.origin, autorise = o && ORIGINES.has(o) && o !== "null" ? o : null;
+  if (req.method === "OPTIONS") { res.writeHead(204, autorise ? { "Access-Control-Allow-Origin": autorise, "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "86400", Vary: "Origin" } : {}); return res.end(); }
+  if (req.method !== "POST") return json(res, 405, { ok: false, message: "POST attendu" }, autorise);
+  if (!autorise) return json(res, 403, { ok: false, message: "Origine non autorisée" });
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  const t = Date.now(), l = (derniersMail.get(ip) || []).filter(x => t - x < 600000); l.push(t); derniersMail.set(ip, l);
+  if (l.length > 10) return json(res, 429, { ok: false, message: "Trop de demandes en peu de temps, réessayez dans quelques minutes." }, autorise);
+  let c; try { c = JSON.parse(await lireCorps(req, 10000)); } catch (e) { return json(res, 400, { ok: false, message: "Demande illisible" }, autorise); }
+  const hote = String(c.hote || "").trim().toLowerCase(), port = Number(c.port || 993);
+  const utilisateur = String(c.utilisateur || "").trim(), motdepasse = String(c.motdepasse || "");
+  const depuis = new Date(c.depuis || Date.now() - 14 * 864e5);
+  if (!/^[a-z0-9.-]{3,120}$/.test(hote) || !IMAP_PORTS.has(port) || !utilisateur || !motdepasse || utilisateur.length > 200 || motdepasse.length > 200 || isNaN(depuis))
+    return json(res, 400, { ok: false, message: "Paramètres de la boîte mail incomplets." }, autorise);
+  if (!(await adressePublique(new URL("https://" + hote)))) return json(res, 400, { ok: false, message: "Serveur de messagerie inconnu." }, autorise);
+  const debut = new Date(Math.max(depuis.getTime(), Date.now() - 120 * 864e5));
+  try {
+    const r = await lireAlertes({ hote, port, utilisateur, motdepasse, depuis: debut });
+    console.log(new Date().toISOString(), "IMAP", hote, r.parcourus + " mails", r.mails.length + " alertes");
+    return json(res, 200, { ok: true, ...r }, autorise);
+  } catch (e) {
+    const auth = e.authenticationFailed || /auth|login|credentials|invalid/i.test((e.responseText || "") + e.message);
+    console.log(new Date().toISOString(), "IMAP ECHEC", hote, auth ? "identification" : e.code || "erreur");
+    return json(res, 200, { ok: false, message: auth ? "Identifiant ou mot de passe refusé par la messagerie (pour Gmail, utilisez un mot de passe d'application)." : "Connexion à la messagerie impossible (" + (e.code || e.message || "erreur") + ")." }, autorise);
+  }
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   // l'appli peut récupérer le DCE pour le ranger elle-même dans le dossier de réponse
@@ -620,6 +652,7 @@ http.createServer(async (req, res) => {
   if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
+  if (u.pathname === "/mail/imap") return routeMailImap(req, res).catch(e => { console.log("mail", e.code || "erreur"); if (!res.headersSent) json(res, 500, { ok: false, message: "Erreur interne" }); });
   if (u.pathname === "/fiche") return routeFiche(req, res, u).catch(e => { console.log("fiche", e.message); if (!res.headersSent) json(res, 200, { ok: false, message: "Page illisible ou plateforme injoignable (" + e.message + ") : complétez à la main." }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
