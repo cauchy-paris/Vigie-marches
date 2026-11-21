@@ -6,6 +6,9 @@ const http = require("http");
 const { extraire, extraireTous, analyser } = require("./analyse");
 const { textePdf, analyserTexte } = require("./regles");
 const onedrive = require("./onedrive");
+const { extraireFiche } = require("./fiche");
+const dns = require("dns").promises;
+const net = require("net");
 
 const PORT = process.env.PORT || 10000;
 const UA = "Mozilla/5.0 (compatible; VigieMarches/1.0; veille marches publics)";
@@ -563,6 +566,48 @@ async function routeOneDriveFichier(req, res) {
   }
 }
 
+/* ---------- fiche d'une consultation (ajout manuel d'un marché dans Vigie) ----------
+   Lit la page publique de la consultation et renvoie seulement les champs reconnus
+   (intitulé, acheteur, date limite…), jamais la page elle-même. Adresses internes refusées. */
+function ipPrivee(ip) {
+  if (net.isIPv4(ip)) { const [a, b] = ip.split(".").map(Number); return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224; }
+  const x = ip.toLowerCase(); return x === "::1" || x === "::" || /^(fc|fd|fe80)/.test(x) || /^::ffff:/.test(x) && ipPrivee(x.replace(/^::ffff:/, ""));
+}
+async function adressePublique(u) {
+  if (process.env.HOTE_TEST && u.hostname === process.env.HOTE_TEST) return true;
+  if (!/^https?:$/.test(u.protocol) || (u.port && !["80", "443"].includes(u.port)) || u.username || u.password) return false;
+  if (net.isIP(u.hostname) || /^(localhost|.*\.local|.*\.internal)$/i.test(u.hostname)) return false;
+  try { const l = await dns.lookup(u.hostname, { all: true }); return l.length > 0 && !l.some(a => ipPrivee(a.address)); } catch (e) { return false; }
+}
+async function routeFiche(req, res, u) {
+  const o = req.headers.origin, autorise = o && ORIGINES.has(o) ? o : null;
+  let cible;
+  try { cible = new URL(String(u.searchParams.get("url") || "").slice(0, 2000)); } catch (e) { return json(res, 400, { ok: false, message: "Adresse invalide." }, autorise); }
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+  if (tropDeDemandes(ip)) return json(res, 429, { ok: false, message: "Trop de demandes en peu de temps, réessayez dans quelques minutes." }, autorise);
+  const jar = new Map();
+  let rep, url = cible;
+  for (let i = 0; i < 6; i++) {
+    if (!(await adressePublique(url))) return json(res, 400, { ok: false, message: "Cette adresse ne peut pas être lue." }, autorise);
+    rep = await fetch(url, { redirect: "manual", headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36 VigieMarches", "Accept": "text/html,application/xhtml+xml", "Accept-Language": "fr-FR,fr;q=0.9", Cookie: enTete(jar) }, signal: AbortSignal.timeout(30000) });
+    majCookies(jar, rep);
+    const loc = rep.headers.get("location");
+    if (rep.status >= 300 && rep.status < 400 && loc) { url = new URL(loc, url); continue; }
+    break;
+  }
+  if (!rep.ok) return json(res, 200, { ok: false, message: "La plateforme a répondu « " + rep.status + " » : complétez les informations à la main." }, autorise);
+  const type = rep.headers.get("content-type") || "";
+  if (!/html|xml|text\/plain/i.test(type)) { try { await rep.body.cancel(); } catch (e) {} return json(res, 200, { ok: false, message: "Ce lien ne mène pas à une page de consultation (fichier " + type.split(";")[0] + ")." }, autorise); }
+  const morceaux = []; let n = 0;
+  for await (const c of rep.body) { n += c.length; morceaux.push(c); if (n > 4e6) break; }
+  const buf = Buffer.concat(morceaux);
+  let charset = (type.match(/charset=([\w-]+)/i) || [])[1] || (buf.subarray(0, 3000).toString("latin1").match(/<meta[^>]+charset=["']?([\w-]+)/i) || [])[1] || "utf-8";
+  let html; try { html = new TextDecoder(charset.toLowerCase()).decode(buf); } catch (e) { html = buf.toString("utf8"); }
+  const fiche = extraireFiche(html, url.toString());
+  console.log(new Date().toISOString(), "FICHE", url.hostname, fiche.trouves + "/5");
+  return json(res, 200, { ok: true, url: url.toString(), fiche }, autorise);
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   // l'appli peut récupérer le DCE pour le ranger elle-même dans le dossier de réponse
@@ -575,6 +620,7 @@ http.createServer(async (req, res) => {
   if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
+  if (u.pathname === "/fiche") return routeFiche(req, res, u).catch(e => { console.log("fiche", e.message); if (!res.headersSent) json(res, 200, { ok: false, message: "Page illisible ou plateforme injoignable (" + e.message + ") : complétez à la main." }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic") {
     TRACE = [];
