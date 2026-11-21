@@ -580,6 +580,17 @@ async function adressePublique(u) {
   if (net.isIP(u.hostname) || /^(localhost|.*\.local|.*\.internal)$/i.test(u.hostname)) return false;
   try { const l = await dns.lookup(u.hostname, { all: true }); return l.length > 0 && !l.some(a => ipPrivee(a.address)); } catch (e) { return false; }
 }
+// « Règlement de consultation - 422,15 Ko », « Dossier de consultation - 13,55 Mo » (PLACE, Maximilien, Atexo…)
+function piecesDeLaPage(html) {
+  const r = new Set();
+  const texte = html.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, "\n").replace(/&nbsp;|&#160;/g, " ");
+  for (const l of texte.split("\n")) {
+    const m = l.replace(/\s+/g, " ").trim().match(/^((?:r[èe]glement de (?:la )?consultation|dossier de consultation|dce|avis|pi[èe]ces?|annexes?|compl[ée]ment)[^:]{0,80}?)\s*[-–(]\s*([\d\s.,]+\s*(?:[KMG]i?o|octets|[KMG]B))\)?$/i);
+    if (m) r.add(m[1].trim() + " - " + m[2].replace(/\s+/g, " ").trim());
+    if (r.size >= 20) break;
+  }
+  return [...r];
+}
 async function routeFiche(req, res, u) {
   const o = req.headers.origin, autorise = o && ORIGINES.has(o) ? o : null;
   let cible;
@@ -605,6 +616,7 @@ async function routeFiche(req, res, u) {
   let charset = (type.match(/charset=([\w-]+)/i) || [])[1] || (buf.subarray(0, 3000).toString("latin1").match(/<meta[^>]+charset=["']?([\w-]+)/i) || [])[1] || "utf-8";
   let html; try { html = new TextDecoder(charset.toLowerCase()).decode(buf); } catch (e) { html = buf.toString("utf8"); }
   const fiche = extraireFiche(html, url.toString());
+  fiche.docs = piecesDeLaPage(html); // tailles du RC et du DCE : un changement signale un DCE modifié
   console.log(new Date().toISOString(), "FICHE", url.hostname, fiche.trouves + "/5");
   return json(res, 200, { ok: true, url: url.toString(), fiche }, autorise);
 }
@@ -630,7 +642,7 @@ async function routeMailImap(req, res) {
   if (!(await adressePublique(new URL("https://" + hote)))) return json(res, 400, { ok: false, message: "Serveur de messagerie inconnu." }, autorise);
   const debut = new Date(Math.max(depuis.getTime(), Date.now() - 120 * 864e5));
   try {
-    const r = await lireAlertes({ hote, port, utilisateur, motdepasse, depuis: debut });
+    const r = await lireAlertes({ hote, port, utilisateur, motdepasse, depuis: debut, messages: c.messages === true });
     console.log(new Date().toISOString(), "IMAP", hote, r.parcourus + " mails", r.mails.length + " alertes");
     return json(res, 200, { ok: true, ...r }, autorise);
   } catch (e) {
