@@ -76,7 +76,14 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
 .cx-menu .cx-qui b{display:block;color:var(--bleu-fonce,#0d2257);font-size:14px}
 .cx-menu button{background:none;border:0;text-align:left;padding:9px 10px;border-radius:6px;cursor:pointer;font-weight:600;color:var(--bleu,#16337a)}
 .cx-menu button:hover{background:var(--bleu-clair,#e8eefb)}
-.cx-menu button.rouge{color:var(--rouge,#d22d39)}`;
+.cx-menu button.rouge{color:var(--rouge,#d22d39)}
+.cx-menu .cx-titre{padding:8px 10px 2px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--rouge,#d22d39)}
+.cx-menu .cx-note{padding:2px 10px 6px;font-size:12px;color:var(--gris,#5b6785);max-width:260px}
+.cx-roue{width:40px;height:40px;flex:none;border-radius:50%;border:1.5px solid rgba(255,255,255,.5);background:transparent;color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
+.cx-roue:hover{background:rgba(255,255,255,.15)}
+@media (max-width:900px){.bandeau-in{position:relative}.cx-roue{position:absolute;top:12px;right:14px}.bandeau .marque{padding-right:48px}}
+.cx-menu{max-width:calc(100vw - 16px)}
+.cx-roue svg{transition:transform .3s}.cx-roue:hover svg{transform:rotate(45deg)}`;
   document.head.appendChild(css);
 
   const el = (tag, attrs = {}, ...enfants) => {
@@ -229,36 +236,47 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     charger();
   }
 
-  /* ---------- bouton du compte dans le bandeau ---------- */
+  /* ---------- engrenage des réglages, en haut à droite du bandeau ---------- */
   let btn = null;
   function majBouton() {
     if (!btn || !session) return;
-    btn.querySelector("span:last-child").textContent = (session.compte.nom || session.compte.email).split(" ")[0];
+    btn.title = "Réglages · " + (session.compte.nom || session.compte.email);
   }
   function deconnecter() { garder(null); location.reload(); }
+  function cliquer(sel) { const b = document.querySelector(sel); if (b) b.click(); }
   function menu() {
     const ouvert = document.querySelector(".cx-menu"); if (ouvert) { ouvert.remove(); return; }
     const c = session.compte, r = btn.getBoundingClientRect();
+    const item = (texte, action, cls) => el("button", { type: "button", role: "menuitem", class: cls || null, onclick: () => { m.remove(); action(); } }, texte);
+    const synchro = window.Synchro && window.Synchro.etat();
     const m = el("div", { class: "cx-menu", role: "menu", style: `top:${r.bottom + window.scrollY + 6}px;right:${Math.max(8, document.documentElement.clientWidth - r.right)}px` },
       el("div", { class: "cx-qui" }, el("b", { text: c.nom }), c.email + (c.role === "admin" ? " · administrateur" : "")),
-      el("button", { type: "button", role: "menuitem", text: "Changer mon mot de passe", onclick: () => { m.remove(); changerMotDePasse(false); } }),
-      c.role === "admin" ? el("button", { type: "button", role: "menuitem", text: "Gérer les comptes", onclick: () => { m.remove(); gererComptes(); } }) : null,
-      el("button", { type: "button", role: "menuitem", class: "rouge", text: "Se déconnecter", onclick: deconnecter }));
+      el("div", { class: "cx-titre", text: "Connexions" }),
+      document.querySelector("#btnOd") ? item("☁  Mon drive (OneDrive, dossier du PC…)", () => cliquer("#btnOd")) : null,
+      document.querySelector("#btnMail") ? item("✉  Alertes mail", () => cliquer("#btnMail")) : null,
+      synchro ? el("div", { class: "cx-note", text: synchro }) : null,
+      el("div", { class: "cx-titre", text: "Mon compte" }),
+      item("🔑  Changer mon mot de passe", () => changerMotDePasse(false)),
+      c.role === "admin" ? item("👥  Gérer les comptes", gererComptes) : null,
+      item("↩  Se déconnecter", deconnecter, "rouge"));
     document.body.appendChild(m);
     setTimeout(() => document.addEventListener("click", function f(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("click", f); } }), 0);
   }
   function poserBouton() {
-    const zone = document.querySelector(".actions-bandeau");
-    if (!zone || btn) return;
-    btn = el("button", { type: "button", class: "btn-bandeau", id: "btnCompte", title: "Mon compte", "aria-haspopup": "menu", onclick: menu }, el("span", { "aria-hidden": "true", text: "👤" }), el("span"));
-    zone.appendChild(btn); majBouton();
+    if (btn) return;
+    const nav = document.querySelector(".bandeau .onglets"), zone = document.querySelector(".bandeau-in");
+    if (!zone) return;
+    btn = el("button", { type: "button", class: "cx-roue", id: "btnCompte", "aria-label": "Réglages", "aria-haspopup": "menu", onclick: menu });
+    btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.3 7.3 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.3 7.3 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.5c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6L19.4 13ZM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z"/></svg>';
+    if (nav) nav.after(btn); else zone.appendChild(btn);
+    majBouton();
   }
 
   /* ---------- démarrage ---------- */
   let suiteLancee = false;
   function entrer(suite) {
     poserBouton();
-    if (!suiteLancee) { suiteLancee = true; suite(); }
+    if (!suiteLancee) { suiteLancee = true; suite(); if (window.Synchro) window.Synchro.demarrer(session.compte.email); }
     if (session.compte.provisoire) changerMotDePasse(true);
   }
   function sessionPerdue() {
@@ -275,5 +293,5 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       .catch(e => { if (e.statut === 401) sessionPerdue(); });
     rafraichir(); setInterval(rafraichir, 6 * 3600e3);
   }
-  window.Comptes = { demarrer, deconnecter, session: () => session };
+  window.Comptes = { demarrer, deconnecter, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
 })();

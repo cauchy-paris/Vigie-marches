@@ -64,6 +64,22 @@ function compteDe(req, u) {
   const a = u.searchParams.get("acces");
   return a ? lireJeton(a, "l") : null;
 }
+// chiffrement des secrets d'un utilisateur (mot de passe de messagerie) : AES-256-GCM, clé propre à chaque compte
+const cleDe = email => crypto.createHmac("sha256", SECRET).update("secret-utilisateur:" + email).digest();
+function chiffrer(texte, email) {
+  const iv = crypto.randomBytes(12), c = crypto.createCipheriv("aes-256-gcm", cleDe(email), iv);
+  const ct = Buffer.concat([c.update(String(texte), "utf8"), c.final()]);
+  return "v1." + b64(iv) + "." + b64(c.getAuthTag()) + "." + b64(ct);
+}
+function dechiffrer(chiffre, email) {
+  const [v, iv, tag, ct] = String(chiffre || "").split(".");
+  if (v !== "v1" || !iv || !tag || !ct) return null;
+  try {
+    const d = crypto.createDecipheriv("aes-256-gcm", cleDe(email), Buffer.from(iv, "base64url"));
+    d.setAuthTag(Buffer.from(tag, "base64url"));
+    return Buffer.concat([d.update(Buffer.from(ct, "base64url")), d.final()]).toString("utf8");
+  } catch (e) { return null; }
+}
 const sessionDe = c => ({ jeton: signer(c, "s"), lien: signer(c, "l"), compte: publicCompte(c) });
 
 /* ---------- limite des essais de mot de passe ---------- */
@@ -131,6 +147,12 @@ async function routeCompte(req, res, u, { json, lireCorps, ip }) {
 
   if (chemin === "moi") return json(res, 200, { lien: signer(moi, "l"), compte: publicCompte(moi) });
 
+  if (chemin === "chiffrer") {
+    const texte = String(c.texte || "");
+    if (!texte || texte.length > 300) return json(res, 400, { message: "Texte à chiffrer invalide." });
+    return json(res, 200, { chiffre: chiffrer(texte, moi.e) });
+  }
+
   if (chemin === "motdepasse") {
     if (bloque("mdp:" + moi.e)) return json(res, 429, { message: "Trop d'essais, réessayez dans 15 minutes." });
     if (!verifierMdp(c.ancien || "", moi.h)) { echec("mdp:" + moi.e); return json(res, 403, { message: "Mot de passe actuel incorrect." }); }
@@ -170,4 +192,4 @@ async function routeCompte(req, res, u, { json, lireCorps, ip }) {
   return json(res, 404, { message: "Introuvable" });
 }
 
-module.exports = { routeCompte, compteDe };
+module.exports = { routeCompte, compteDe, dechiffrer };

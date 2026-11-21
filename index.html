@@ -599,6 +599,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="comptes.js"></script>
+<script src="synchro.js"></script>
 <script>
 "use strict";
 /* ====================================================================
@@ -2601,7 +2602,7 @@ const MESSAGERIES=[
   ["autre","Autre (indiquer le serveur IMAP)","",null],
 ];
 async function alertesImap(cfg,depuisIso){
-  const rep=await fetch(SERVEUR_DCE+"/mail/imap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hote:cfg.hote,port:993,utilisateur:cfg.utilisateur,motdepasse:cfg.motdepasse,depuis:depuisIso,messages:true}),signal:AbortSignal.timeout(170000)});
+  const rep=await fetch(SERVEUR_DCE+"/mail/imap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hote:cfg.hote,port:993,utilisateur:cfg.utilisateur,motdepasse:cfg.motdepasse,motdepasseChiffre:cfg.motdepasse?undefined:cfg.motdepasseChiffre,depuis:depuisIso,messages:true}),signal:AbortSignal.timeout(170000)});
   const j=await rep.json().catch(()=>({ok:false,message:"Réponse illisible du serveur ("+rep.status+")"}));
   if(!j.ok) throw new Error(j.message||"Lecture de la boîte impossible");
   return {mails:j.mails||[],messages:j.messages||[],lus:j.parcourus||0,echanges:j.echanges||0};
@@ -2669,14 +2670,18 @@ function ouvrirImportMail(){
   const reglerAuto=(source,cfg)=>{ memo.auto=cbAuto.checked?{actif:true,source,utilisateur:cfg&&cfg.utilisateur||""}:{actif:false}; };
   const bImap=el("button",{class:"btn btn-plein",type:"button"},"Chercher dans cette boîte");
   iType.value=imap.type||"gmail"; iAdr.value=imap.utilisateur||""; iHote.value=imap.hote||""; iMdp.value=imap.motdepasse||""; iSouv.checked=!!imap.souvenir;
+  // mot de passe enregistré (chiffré) dans le compte Vigie depuis un autre appareil
+  const mdpCompte=()=>!iMdp.value&&imap.motdepasseChiffre&&iAdr.value.trim()===imap.utilisateur?imap.motdepasseChiffre:"";
   const majType=()=>{ const d=MESSAGERIES.find(x=>x[0]===iType.value); if(d&&d[2]) iHote.value=d[2]; iHote.hidden=iType.value!=="autre"&&iType.value!=="ovh"&&iType.value!=="ionos"; iMdp.placeholder=iType.value==="gmail"||iType.value==="yahoo"||iType.value==="icloud"?"mot de passe d'application (16 caractères)":"mot de passe de la boîte mail"; };
   iType.onchange=majType;
   iAdr.addEventListener("change",()=>{ const d=MESSAGERIES.find(x=>x[3]&&x[3].test(iAdr.value.trim())); if(d){ iType.value=d[0]; majType(); } });
   majType();
+  if(!imap.motdepasse&&imap.motdepasseChiffre) iMdp.placeholder="mot de passe déjà enregistré dans votre compte";
   bImap.onclick=async()=>{
     if(occupe) return;
-    const cfg={type:iType.value,hote:iHote.value.trim(),utilisateur:iAdr.value.trim(),motdepasse:iMdp.value,souvenir:iSouv.checked};
-    if(!cfg.utilisateur||!cfg.motdepasse||!cfg.hote){ dire("Indiquez l'adresse, le mot de passe"+(iHote.hidden?"":" et le serveur IMAP")+".","ko"); return; }
+    const cfg={type:iType.value,hote:iHote.value.trim(),utilisateur:iAdr.value.trim(),motdepasse:iMdp.value,souvenir:iSouv.checked||!!mdpCompte()};
+    if(mdpCompte()) cfg.motdepasseChiffre=mdpCompte();
+    if(!cfg.utilisateur||(!cfg.motdepasse&&!cfg.motdepasseChiffre)||!cfg.hote){ dire("Indiquez l'adresse, le mot de passe"+(iHote.hidden?"":" et le serveur IMAP")+".","ko"); return; }
     if(cbAuto.checked&&!cfg.souvenir){ dire("Pour l'import automatique de chaque matin, cochez aussi « Se souvenir du mot de passe sur cet appareil » (ou décochez l'import automatique).","ko"); return; }
     ecrire(CLE_IMAP,{...cfg,motdepasse:cfg.souvenir?cfg.motdepasse:""});
     occupe=true; bImap.disabled=true;
@@ -2826,7 +2831,7 @@ function ouvrirImportMail(){
       el("h4",{text:"Gmail et autres messageries (Orange, Free, OVH, Yahoo, iCloud…)"}),
       el("div",{class:"ligne"},iType,iAdr),
       el("div",{class:"ligne"},iHote,iMdp),
-      el("label",{class:"note",style:"display:flex;gap:6px;align-items:center"},iSouv,"Se souvenir du mot de passe sur cet appareil"),
+      el("label",{class:"note",style:"display:flex;gap:6px;align-items:center"},iSouv,"Se souvenir du mot de passe (gardé chiffré, retrouvé sur vos autres appareils connectés à Microsoft)"),
       el("div",{class:"ligne"},bImap),
       el("p",{class:"note",text:"Gmail, Yahoo et iCloud demandent un « mot de passe d'application » (pas votre mot de passe habituel) : voir la procédure pas à pas. Le serveur Vigie lit la boîte en lecture seule et ne garde ni le mot de passe ni les mails."})),
     el("div",{class:"bloc"},
@@ -3074,7 +3079,7 @@ async function importAutomatique(force){
       if(!r) return fin({erreur:"Microsoft demande de vous reconnecter : ouvrez « Importer les alertes mail » et cliquez « Se connecter et chercher dans Outlook »."});
     }else{
       const cfg=lire(CLE_IMAP,{});
-      if(!cfg.motdepasse) return fin({erreur:"Le mot de passe de la boîte "+(cfg.utilisateur||"")+" n'est pas mémorisé sur cet appareil : ouvrez « Importer les alertes mail », cochez « Se souvenir du mot de passe » et lancez un import."});
+      if(!cfg.motdepasse&&!cfg.motdepasseChiffre) return fin({erreur:"Le mot de passe de la boîte "+(cfg.utilisateur||"")+" n'est pas mémorisé sur cet appareil : ouvrez « Importer les alertes mail », cochez « Se souvenir du mot de passe » et lancez un import."});
       afficherMatin("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
       r=await alertesImap(cfg,depuis.toISOString());
     }
