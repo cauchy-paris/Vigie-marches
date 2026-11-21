@@ -301,6 +301,45 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .attrib .meta{grid-column:1;color:var(--gris);font-size:13px}
 .attrib .gagnant{color:var(--rouge);font-weight:600}
 @media (max-width:600px){.attrib{grid-template-columns:minmax(0,1fr)}.attrib .montant{grid-column:1;grid-row:auto;text-align:left}}
+.badge.pert{border:0;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:700}
+.badge.pert-haut{background:var(--bleu);color:var(--blanc)}
+.badge.pert-moyen{background:var(--bleu-clair);color:var(--bleu);box-shadow:inset 0 0 0 1.5px var(--bleu-moyen)}
+.badge.pert-bas{background:var(--fond);color:var(--gris);box-shadow:inset 0 0 0 1px var(--trait)}
+.pert-detail{background:var(--fond);border-radius:8px;padding:8px 12px;display:grid;gap:4px;font-size:13px}
+.pert-detail ul{margin:0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:4px 14px}
+.pert-detail li.ok::before{content:"✓ ";color:var(--vert);font-weight:700}
+.pert-detail li.ko::before{content:"✗ ";color:var(--rouge);font-weight:700}
+.pert-detail li.neutre::before{content:"• ";color:var(--gris)}
+.plus-ia.hist{border-color:var(--rouge);background:var(--rouge-clair);color:var(--bleu-fonce)}
+.table-defil{overflow-x:auto}
+.ia-criteres td.gagnant{color:var(--rouge);font-weight:600}
+.ia-criteres td.nombre,.bord-table td.nombre{white-space:nowrap;font-variant-numeric:tabular-nums}
+.suivi-offre{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;border-left:4px solid var(--trait);background:var(--fond);border-radius:6px;padding:8px 12px;font-size:13px}
+.suivi-offre .lib{font-weight:700;color:var(--bleu)}
+.suivi-offre select,.suivi-offre input,.bord-table select{border:1.5px solid var(--trait);border-radius:6px;padding:4px 6px;background:var(--blanc)}
+.suivi-offre input{width:120px;text-align:right}
+.suivi-offre label{display:flex;gap:6px;align-items:center}
+.suivi-offre.etape-depose{border-left-color:var(--bleu-moyen)}
+.suivi-offre.etape-gagne{border-left-color:var(--rouge);background:var(--rouge-clair)}
+.suivi-offre.etape-perdu,.suivi-offre.etape-abandon,.suivi-offre.etape-sanssuite{border-left-color:var(--gris)}
+.bord-tete{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.tuiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.tuile .tuile-lib{font-weight:700;color:var(--bleu-fonce);margin-top:4px}
+.tuile.rouge{border-top:4px solid var(--rouge)}
+.tuile.rouge .chiffre{color:var(--rouge)}
+.bord-table small.urgent{color:var(--rouge);font-weight:700}
+.graph-cont{position:relative}
+.graph{width:100%;max-width:820px;height:auto;display:block}
+.bord-tete select{width:auto}
+.graph .grille-l{stroke:var(--trait);stroke-width:1}
+.graph .axe{fill:var(--gris);font-size:11px}
+.graph .barre-dep{fill:var(--bleu)}
+.graph .barre-gagne{fill:var(--rouge);stroke:var(--blanc);stroke-width:2}
+.graph rect:hover{fill:rgba(22,51,122,.06)}
+.legende{display:flex;gap:6px 14px;align-items:center;font-size:12.5px;color:var(--gris);margin-bottom:6px;flex-wrap:wrap}
+.pastille-l{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:-8px}
+.pastille-l.dep{background:var(--bleu)}.pastille-l.gagne{background:var(--rouge)}
+.tip{position:absolute;top:0;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-weight:500;z-index:50}
 @media (prefers-reduced-motion:no-preference){.carte{animation:entre .25s ease-out both}@keyframes entre{from{transform:translateY(4px);opacity:.6}to{transform:none;opacity:1}}}
 </style>
@@ -318,6 +357,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
       <button class="onglet" role="tab" aria-selected="true" data-vue="recherche">Recherche</button>
       <button class="onglet" role="tab" aria-selected="false" data-vue="suivi">Mes marchés <span class="pastille" id="nbSuivis">0</span></button>
       <button class="onglet" role="tab" aria-selected="false" data-vue="attribues">Marchés attribués</button>
+      <button class="onglet" role="tab" aria-selected="false" data-vue="bord">Tableau de bord</button>
       <button class="onglet" role="tab" aria-selected="false" data-vue="sources">Sources &amp; plateformes</button>
     </nav>
     <div class="actions-bandeau">
@@ -406,10 +446,12 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
       <div class="nb" id="nbRes">–</div>
       <div class="txt" id="txtRes">marchés trouvés<small>Lancement de la recherche…</small></div>
       <div class="tri">
+        <button class="btn" id="btnProfil" type="button" title="Métiers, zone et taille de marché : sert à noter la pertinence de chaque marché">🎯 Mon profil</button>
         <label for="fTri" style="font-size:13px">Trier</label>
         <select id="fTri">
           <option value="datelimitereponse asc">Date limite la plus proche</option>
           <option value="dateparution desc">Publication la plus récente</option>
+          <option value="pertinence">Les plus pertinents pour moi</option>
         </select>
       </div>
     </div>
@@ -520,6 +562,24 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
     <div id="dSynthese"></div>
     <div id="dListe" style="display:grid;gap:10px"></div>
     <div class="pagination" id="dPagination"></div>
+  </section>
+</main>
+
+<!-- ============ VUE TABLEAU DE BORD ============ -->
+<main class="page" id="vue-bord" hidden style="grid-template-columns:minmax(0,1fr)">
+  <section class="resultats">
+    <div class="encadre bord-tete">
+      <div>
+        <h2>Tableau de bord</h2>
+        <p class="note-docs">Vos réponses, vos résultats et les montants gagnés. Indiquez l'étape de chaque offre sur l'encart (« Suivi de l'offre ») ou dans la colonne Résultat du tableau Excel.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label for="bPeriode" style="font-size:13px">Période</label>
+        <select id="bPeriode"><option value="365" selected>12 derniers mois</option><option value="annee">Cette année</option><option value="">Depuis le début</option></select>
+        <button class="btn" id="bProfil" type="button">Mon profil entreprise</button>
+      </div>
+    </div>
+    <div id="bordContenu" style="display:grid;gap:14px"></div>
   </section>
 </main>
 
@@ -741,7 +801,7 @@ const URL_RE=/https?:\/\/[^\s"'<>\\)]+/gi;
 const URL_IGNOREES=/telerecours|juradm|europa\.eu|legifrance|service-public|conseil-etat|economie\.gouv\.fr\/daj|w3\.org|schemas|xmlns|boamp\.journal-officiel/i;
 
 function analyserDonnees(brut){
-  const res={description:"",lieu:"",duree:"",montant:"",lots:[],cpv:[],urlDocs:null,urlDepot:null,urlProfil:null,refAcheteur:"",villeAcheteur:"",accordCadre:false};
+  const res={description:"",lieu:"",duree:"",montant:"",lots:[],cpv:[],urlDocs:null,urlDepot:null,urlProfil:null,refAcheteur:"",villeAcheteur:"",siretAcheteur:"",accordCadre:false};
   if(!brut) return res;
   let d; try{ d=typeof brut==="string"?JSON.parse(brut):brut; }catch(e){ return res; }
 
@@ -826,6 +886,13 @@ function analyserDonnees(brut){
     if(txt(premier(premier(o,"cac:PartyIdentification")||{},"cbc:ID"))===idAch){ ville=txt(premier(o,"cbc:CityName")); break; }
   }
   res.villeAcheteur = ville || premierRe(d,/^(cbc:CityName|VILLE|ville|commune)$/i) || "";
+  // --- SIRET de l'acheteur (historique DECP exact)
+  let siret="";
+  if(idAch) for(const o of tous(d,"efac:Company").flatMap(x=>Array.isArray(x)?x:[x])){
+    if(txt(premier(premier(o,"cac:PartyIdentification")||{},"cbc:ID"))===idAch){ siret=txt(premier(premier(o,"cac:PartyLegalEntity")||{},"cbc:CompanyID")); break; }
+  }
+  if(!/^\d{9}/.test((siret||"").replace(/\s/g,""))) siret=premierRe(d,/^(SIRET|siret|CODE_IDENT_NATIONAL|codeIdentificationNational|NUM_SIRET)$/i,t=>/^\d[\d\s]{8,}$/.test(t))||"";
+  res.siretAcheteur=(siret||"").replace(/\s/g,"");
   // --- accord-cadre
   const brutTxt=typeof brut==="string"?brut:JSON.stringify(brut);
   res.accordCadre = /"(fa-wo-rc|fa-w-rc|fa-mix)"|accord[- ]?cadre|ACCORD_CADRE"\s*:\s*\{|"accordCadre"\s*:\s*"?(true|oui)/i.test(brutTxt);
@@ -897,8 +964,8 @@ async function rechercher(page=0){
   afficherManuels();
   const id=++requeteEnCours;
   const where=construireWhere();
-  const tri=$("#fTri").value;
-  const params=new URLSearchParams({select:CHAMPS,limit:String(PAR_PAGE),offset:String(page*PAR_PAGE),order_by:tri});
+  const tri=$("#fTri").value, parPert=tri==="pertinence", nP=parPage();
+  const params=new URLSearchParams({select:CHAMPS,limit:String(nP),offset:String(page*nP),order_by:parPert?"datelimitereponse asc":tri});
   if(where) params.set("where",where);
   const url=API+"?"+params.toString();
   $("#txtRes").innerHTML='marchés trouvés<small>Recherche en cours…</small>';
@@ -911,6 +978,7 @@ async function rechercher(page=0){
     if(!rep.ok){ throw new Error((corps&&(corps.message||corps.error_code))||("Erreur HTTP "+rep.status)); }
     const total=corps.total_count||0;
     const items=(corps.results||[]).map(normaliser);
+    if(parPert) items.sort((a,b)=>notePertinence(b).score-notePertinence(a).score);
     afficherCompteur(total);
     afficherListe($("#liste"),items,"Aucun marché ne correspond à ces filtres. Essayez d'élargir la recherche (moins de départements, sans mots-clés, ou en décochant « encore ouverts »).");
     afficherPagination(total);
@@ -928,12 +996,12 @@ async function rechercher(page=0){
 }
 function afficherCompteur(total){
   $("#nbRes").textContent=total.toLocaleString("fr-FR");
-  const debut=etat.page*PAR_PAGE+1, fin=Math.min(total,(etat.page+1)*PAR_PAGE);
+  const nP=parPage(), debut=etat.page*nP+1, fin=Math.min(total,(etat.page+1)*nP);
   const s=total>1?"s":"";
-  $("#txtRes").innerHTML=(total>1?"marchés trouvés":"marché trouvé")+'<small>'+(total?("Affichage "+debut+" à "+fin+" · source BOAMP, mise à jour quotidienne"):"Aucun résultat")+'</small>';
+  $("#txtRes").innerHTML=(total>1?"marchés trouvés":"marché trouvé")+'<small>'+(total?("Affichage "+debut+" à "+fin+(nP>PAR_PAGE?" classés par pertinence":"")+" · source BOAMP, mise à jour quotidienne"):"Aucun résultat")+'</small>';
 }
 function afficherPagination(total){
-  const nbPages=Math.min(Math.ceil(total/PAR_PAGE),Math.floor(10000/PAR_PAGE));
+  const nP=parPage(), nbPages=Math.min(Math.ceil(total/nP),Math.floor(10000/nP));
   const p=$("#pagination"); p.innerHTML="";
   if(nbPages<=1) return;
   const b=(lib,page,dis)=>{ const x=document.createElement("button"); x.type="button"; x.className="btn"; x.textContent=lib; if(dis) x.setAttribute("aria-disabled","true"); x.onclick=()=>{ rechercher(page); window.scrollTo({top:0,behavior:"smooth"}); }; return x; };
@@ -987,6 +1055,7 @@ function carte(m){
   if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
   const plat=plateformeDe(m.urlDocs||m.urlDepot||m.urlProfil);
   if(plat) badges.append(el("span",{class:"badge plateforme",title:plat.compte||"",text:"DCE sur "+plat.nom}));
+  const pert=notePertinence(m);
 
   // Échéance
   const j=joursRestants(m.limite);
@@ -999,6 +1068,7 @@ function carte(m){
   c.append(el("div",{class:"carte-tete"},
     el("div",{class:"gauche"},badges,el("h3",{text:m.objet}),el("div",{class:"acheteur",text:m.acheteur})),
     ech));
+  { const det=detailPertinence(pert); badges.prepend(badgePertinence(pert,det)); c.append(det); }
 
   // Infos essentielles
   const infos=el("dl",{class:"infos"});
@@ -1059,6 +1129,7 @@ function carte(m){
   if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"));
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
+  if(st==="reponse"||resultats[m.idweb]) c.append(ligneSuiviOffre(m));
   const panneau=el("div",{class:"ia",hidden:true});
   const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du règlement de consultation");
   bIA.onclick=()=>{
@@ -1067,6 +1138,10 @@ function carte(m){
     if(ouvrir&&!panneau.dataset.charge) lancerAnalyse(m,atx,panneau,false);
   };
   c.append(bIA,panneau);
+  { const pH=el("div",{class:"ia",hidden:true});
+    const bH=el("button",{class:"plus-ia hist",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"Qui gagne chez cet acheteur ? Attributions passées et prix pratiqués");
+    bH.onclick=()=>{ const o=pH.hidden; pH.hidden=!o; bH.setAttribute("aria-expanded",String(o)); if(o&&!pH.dataset.charge){ pH.dataset.charge="1"; panneauAttributions(m,pH); } };
+    c.append(bH,pH); }
   const note = atx
     ? (plat?plat.nom:"Plateforme")+" · RC et DCE en téléchargement direct, sans compte. Le premier DCE de la journée peut mettre jusqu'à une minute à démarrer."
     : cible
@@ -1622,7 +1697,8 @@ const COLS=[
   {k:"questions",titre:"Date limite des questions",l:14,date:1},{k:"visite",titre:"Visite prévue",l:17},
   {k:"dateVisite",titre:"Date de visite",l:13,date:1},{k:"ponderation",titre:"Pondération de notation",l:42},
   {k:"limite",titre:"Date limite de remise",l:16,date:2},{k:"decision",titre:"Décision",l:19},
-  {k:"dossier",titre:"Dossier",l:44},{k:"ref",titre:"Réf. BOAMP",l:11}
+  {k:"dossier",titre:"Dossier",l:44},{k:"ref",titre:"Réf. BOAMP",l:11},
+  {k:"resultat",titre:"Résultat",l:16},{k:"montantOffre",titre:"Montant de l'offre (€ HT)",l:16}
 ];
 const estNePasRepondre=v=>/ne\s*repon/.test(sansAccent(String(v||"")));
 const CLE_TABLEAU="vigie.tableau.v1";
@@ -1683,6 +1759,9 @@ async function ligneTableau(m,od){
   const nom=nomDossier(m);
   L.dossier=od&&od.webUrl?{text:nom,hyperlink:od.webUrl.replace(/\/$/,"")+"/"+encodeURIComponent(nom)}:nom;
   L.ref=m.idweb;
+  const res=resultats[m.idweb];
+  L.resultat=ETAPES[(res&&res.etape)||"prepa"];
+  if(res&&res.montant) L.montantOffre=res.montant;
   return {L,notes};
 }
 
@@ -1813,12 +1892,18 @@ async function synchroTableau(interactif){
     const ExcelJS=await chargerExcelJS();
     const wb=new ExcelJS.Workbook();
     const buf=await acces.lire();
-    let ws, cree=false;
+    let ws, cree=false, colAjoutee=false;
     if(buf){ await wb.xlsx.load(buf); ws=wb.getWorksheet("Marchés")||wb.worksheets[0]; }
     if(!ws){ ws=feuilleNeuve(wb); cree=true; }
-    const C=colonnes(ws);
+    let C=colonnes(ws);
+    // colonnes ajoutées depuis (Résultat, Montant de l'offre) : créées au bout du tableau existant
+    for(const k of ["resultat","montantOffre"]) if(!C[k]){
+      const col=COLS.find(x=>x.k===k), n=ws.getRow(1).cellCount+1, h=ws.getCell(1,n);
+      h.value=col.titre; h.font={bold:true,color:{argb:"FFFFFFFF"}}; h.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF16337A"}}; h.alignment={vertical:"middle",horizontal:"center",wrapText:true};
+      ws.getColumn(n).width=col.l; C=colonnes(ws); colAjoutee=true;
+    }
     if(!C.ref){ jl("La colonne « Réf. BOAMP » a disparu du tableau : impossible de relier les lignes aux marchés. Remettez-la (titre exact) puis réessayez.","ko"); return; }
-    let modifie=cree, nRetire=0;
+    let modifie=cree||colAjoutee, nRetire=0;
     const lignes=new Map();
     ws.eachRow((row,i)=>{ if(i>1){ const ref=String(ws.getCell(i,C.ref).text||"").trim(); if(ref) lignes.set(ref,i); } });
     // 1. « Je ne réponds pas » : dossier vers 05_Abandonnes, marché retiré de « Mes marchés »
@@ -1830,6 +1915,7 @@ async function synchroTableau(interactif){
         let deplace="absent";
         if(nom){ try{ deplace=await acces.deplacer(nom); }catch(e){ jl("✗ « "+objet+" » : "+(e.message||e),"ko"); continue; } }
         if(deplace==="ok") jl("✓ Dossier « "+nom+" » rangé dans 05_Abandonnes","ok");
+        if(!resultats[ref]||resultats[ref].etape!=="abandon"){ const sm=statuts[ref]&&statuts[ref].m; majResultat(ref,{etape:"abandon",m:sm?resumeMarche(sm):{objet,acheteur:C.acheteur?ws.getCell(i,C.acheteur).text:""}},false); }
         if(statuts[ref]){ delete statuts[ref]; ecrire(CLE_STATUTS,statuts); nRetire++; jl("✓ « "+objet+" » retiré de Mes marchés","ok"); }
         if(manuels[ref]){ delete manuels[ref]; sauverManuels(); afficherManuels(); }
         if(deplace==="ok"){ ws.getRow(i).eachCell(c=>{ c.font={...(c.font||{}),color:{argb:"FF8A93A6"}}; }); modifie=true; }
@@ -1846,8 +1932,24 @@ async function synchroTableau(interactif){
       l.textContent="✓ Ligne ajoutée : "+s.m.objet.slice(0,80); l.className="ok";
     }
     if(C.decision) validationDecision(ws,C.decision,Math.max(ws.rowCount+100,300));
+    // 3. Résultat et montant de l'offre : Vigie -> Excel si modifié dans Vigie, sinon Excel -> Vigie
+    const nettoyer=[];
+    if(C.resultat) for(const [ref,i] of lignes){
+      const res=resultats[ref], cR=ws.getCell(i,C.resultat), cM=C.montantOffre?ws.getCell(i,C.montantOffre):null;
+      if(res&&res.sale){
+        cR.value=ETAPES[res.etape]||""; if(cM&&res.montant){ cM.value=res.montant; cM.numFmt='#,##0 "€"'; }
+        nettoyer.push(ref); modifie=true; continue;
+      }
+      const et=etapeDeTexte(cR.text), mt=cM?nombre(cM.value&&cM.value.result!=null?cM.value.result:cM.text):0;
+      if((et&&(!res||res.etape!==et))||(mt&&(!res||res.montant!==mt))){
+        const sm=statuts[ref]&&statuts[ref].m;
+        majResultat(ref,{...(et?{etape:et}:{}),...(mt?{montant:mt}:{}),m:(res&&res.m)||(sm?resumeMarche(sm):{objet:C.nom?ws.getCell(i,C.nom).text:ref,acheteur:C.acheteur?ws.getCell(i,C.acheteur).text:""})},false);
+      }
+    }
+    for(let r=2,fin=Math.max(ws.rowCount+100,300);C.resultat&&r<=fin;r++){ const c=ws.getCell(r,C.resultat); if(!c.dataValidation||c.dataValidation.type!=="list") c.dataValidation={type:"list",allowBlank:true,formulae:['"'+Object.values(ETAPES).join(",")+'"']}; }
     if(modifie){
       await acces.ecrire(await wb.xlsx.writeBuffer());
+      if(nettoyer.length){ nettoyer.forEach(r=>{ if(resultats[r]) delete resultats[r].sale; }); sauverResultats(); }
       const t=lire(CLE_TABLEAU,{});
       const l=jl((cree?"✓ Tableau « "+NOM_EXCEL+" » créé dans ":"✓ Tableau « "+NOM_EXCEL+" » mis à jour dans ")+acces.lieu+" ","ok");
       if(t&&t.webUrl&&acces.od) l.append(el("a",{href:t.webUrl,target:"_blank",rel:"noopener"},"Ouvrir le tableau"));
@@ -2096,7 +2198,7 @@ function ouvrirAjout(existant){
 }
 
 /* ---------- Statuts ---------- */
-function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi}=m; return {manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
+function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi,siretAcheteur}=m; return {siretAcheteur,manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
   if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
@@ -2180,7 +2282,7 @@ function majSegments(){ document.querySelectorAll("#fType button").forEach(b=>b.
 /* ---------- Sources ---------- */
 const SOURCES=[
   {nom:"BOAMP",url:"https://www.boamp.fr/",etat:"ok",lib:"Intégré",txt:"API open data publique, interrogée en direct par cet outil. Filtres, compteur et encarts reposent sur ces données."},
-  {nom:"DECP · marchés attribués",url:"https://data.economie.gouv.fr/explore/dataset/decp-v3-marches-valides/",etat:"ok",lib:"Intégré",txt:"API open data publique. Elle alimente l'onglet « Marchés attribués » et le bouton « Historique acheteur » : titulaires, montants, nombre d'offres reçues."},
+  {nom:"DECP · marchés attribués",url:"https://data.economie.gouv.fr/explore/dataset/decp-v3-marches-valides/",etat:"ok",lib:"Intégré",txt:"API open data publique. Elle alimente l'onglet « Marchés attribués », le bouton « Historique acheteur » et, sur chaque encart, le volet « Qui gagne chez cet acheteur ? » : titulaires, montants, nombre d'offres reçues, prix constatés dans le département."},
   {nom:"TED (Journal officiel de l'UE)",url:"https://ted.europa.eu/",etat:"partiel",lib:"Non branché",txt:"API publique ouverte, mais pour la France elle reprend les mêmes avis que le BOAMP (marchés au-dessus des seuils européens). La brancher ferait des doublons."},
   {nom:"PLACE (État)",url:"https://www.marches-publics.gouv.fr/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique de recherche. Les marchés de l'État publiés au BOAMP renvoient vers PLACE. Le DCE s'y télécharge sans compte (identification facultative)."},
   {nom:"Maximilien (Île-de-France)",url:"https://marches.maximilien.fr/",etat:"partiel",lib:"Via BOAMP",txt:"Pas d'API publique. Même moteur que PLACE : DCE en général téléchargeable sans compte. Les annonces publiées au BOAMP y renvoient."},
@@ -2202,7 +2304,8 @@ let toastT; function toast(t){ const e=$("#toast"); e.textContent=t; e.hidden=fa
 
 function changerVue(v){
   document.querySelectorAll(".onglet").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.vue===v)));
-  ["recherche","suivi","attribues","sources"].forEach(x=>$("#vue-"+x).hidden=(x!==v));
+  ["recherche","suivi","attribues","bord","sources"].forEach(x=>$("#vue-"+x).hidden=(x!==v));
+  if(v==="bord") afficherBord();
   if(v==="suivi") afficherSuivi();
 }
 
@@ -3248,12 +3351,12 @@ function init(){
   $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; etat.regions.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); msRegions.rafraichir(); rechercher(0); };
   document.querySelectorAll(".onglet").forEach(b=>b.onclick=()=>changerVue(b.dataset.vue));
   $("#btnExport").onclick=()=>{
-    const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts,manuels,rectif},null,2)],{type:"application/json"});
+    const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts,manuels,rectif,resultats,profil:lire(CLE_PROFIL,null)},null,2)],{type:"application/json"});
     const a=el("a",{href:URL.createObjectURL(blob),download:"vigie-marches-statuts-"+dateIso(new Date())+".json"}); document.body.append(a); a.click(); a.remove();
   };
   $("#fichierImport").onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
-    try{ const j=JSON.parse(await f.text()); const s=j.statuts||j; if(typeof s!=="object") throw 0; statuts={...statuts,...s}; ecrire(CLE_STATUTS,statuts); if(j.manuels&&typeof j.manuels==="object"){ manuels={...manuels,...j.manuels}; sauverManuels(); afficherManuels(); } if(j.rectif&&j.rectif.par){ rectif.par={...j.rectif.par,...rectif.par}; sauverRectif(); afficherModifs(); } majCompteSuivis(); afficherSuivi(); toast(Object.keys(s).length+" marchés restaurés"); }
+    try{ const j=JSON.parse(await f.text()); const s=j.statuts||j; if(typeof s!=="object") throw 0; statuts={...statuts,...s}; ecrire(CLE_STATUTS,statuts); if(j.manuels&&typeof j.manuels==="object"){ manuels={...manuels,...j.manuels}; sauverManuels(); afficherManuels(); } if(j.resultats&&typeof j.resultats==="object"){ resultats={...resultats,...j.resultats}; sauverResultats(); } if(j.profil&&typeof j.profil==="object") ecrire(CLE_PROFIL,j.profil); if(j.rectif&&j.rectif.par){ rectif.par={...j.rectif.par,...rectif.par}; sauverRectif(); afficherModifs(); } majCompteSuivis(); afficherSuivi(); toast(Object.keys(s).length+" marchés restaurés"); }
     catch(err){ toast("Fichier de sauvegarde illisible"); }
     e.target.value="";
   };
@@ -3265,9 +3368,330 @@ function init(){
   majBlocTableau();
   // à l'ouverture : relecture du tableau Excel (décisions « Je ne réponds pas »), sans rien demander
   setTimeout(()=>{ (msConfigure()?msInit().catch(()=>{}):Promise.resolve()).then(()=>synchroTableau(false)); },1500);
-  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto(); initModifs();
+  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto(); initModifs(); initBord();
   rechercher(0);
 }
+/* ====================================================================
+   Note de pertinence (règles, sans IA) selon le profil de l'entreprise
+   notePertinence(m) -> {score:0..100, raisons:[{ok:true|false|null,txt}], exclu}
+   ==================================================================== */
+const CLE_PROFIL="vigie.profil.v1";
+const PROFIL_DEFAUT={
+  metiers:["grosoeuvre","menuiserie","peinture","platrerie","plomberie","cvc","electricite","couverture","serrurerie","demolition","maintenance"],
+  deps:["75","77","78","91","92","93","94","95"],
+  types:["TRAVAUX"],
+  min:20000, max:3000000,
+  favoris:"tous corps d'état, TCE, réhabilitation, rénovation, entretien, aménagement",
+  exclus:"",
+};
+function profil(){ const p=lire(CLE_PROFIL,null); return p?{...PROFIL_DEFAUT,...p,perso:true}:{...PROFIL_DEFAUT,perso:false}; }
+function nombre(v){ if(typeof v==="number") return isFinite(v)?v:0; const t=String(v||"").replace(/[\s  ]/g,"").replace(/€|HT|TTC|eur/gi,"").replace(",","."); const n=parseFloat(t); return isFinite(n)?n:0; }
+function motsListe(t){ return String(t||"").split(/[,;\n]/).map(x=>sansAccent(x.trim())).filter(x=>x.length>1); }
+const regionDe=d=>{ const g=REGIONS.find(r=>r[2].includes(d)); return g?g[0]:null; };
+function notePertinence(m){
+  const P=profil(), raisons=[]; let score=0;
+  const texte=" "+sansAccent([m.objet,(m.lots||[]).join(" "),m.description,(m.descripteurs||[]).join(" ")].join(" "))+" ";
+  // Métier : 35
+  const noms=P.metiers.map(id=>{ const x=METIERS.find(y=>y.id===id); return x?x.nom.split(",")[0]:null; }).filter(Boolean);
+  const ce=corpsEtat(m), communs=ce.filter(x=>noms.includes(x));
+  const tce=/tous corps d.etat|\btce\b|multi.?techni|entreprise generale|clos.couvert/.test(texte);
+  if(communs.length){ score+=35; raisons.push({ok:true,txt:"Vos métiers : "+communs.slice(0,4).join(", ")}); }
+  else if(tce&&noms.length>=3){ score+=35; raisons.push({ok:true,txt:"Tous corps d'état"}); }
+  else if(!ce.length){ score+=12; raisons.push({ok:null,txt:"Métier non identifié dans l'annonce"}); }
+  else raisons.push({ok:false,txt:"Hors de vos métiers ("+ce.slice(0,3).join(", ")+")"});
+  // Type de marché : 10
+  if(!(m.types||[]).length){ score+=5; }
+  else if(m.types.some(t=>P.types.includes(t))){ score+=10; }
+  else raisons.push({ok:false,txt:"Type "+m.types.map(t=>TYPES_LIB[t]||t).join(", ").toLowerCase()+" hors profil"});
+  // Zone : 25
+  const deps=m.deps||[];
+  if(!deps.length){ score+=12; raisons.push({ok:null,txt:"Lieu non précisé"}); }
+  else if(deps.some(d=>P.deps.includes(d))){ score+=25; raisons.push({ok:true,txt:"Dans votre zone ("+deps.filter(d=>P.deps.includes(d)).join(", ")+")"}); }
+  else{ const reg=new Set(P.deps.map(regionDe)); if(deps.some(d=>reg.has(regionDe(d)))){ score+=12; raisons.push({ok:null,txt:"Région voisine de votre zone ("+deps.join(", ")+")"}); } else raisons.push({ok:false,txt:"Hors zone ("+deps.join(", ")+")"}); }
+  // Taille : 20
+  let mt=nombre(m.montant), parLot=false;
+  if(mt&&(m.lots||[]).length>1){ mt=mt/m.lots.length; parLot=true; }
+  const k=n=>n>=1e6?(Math.round(n/1e5)/10).toLocaleString("fr-FR")+" M€":Math.round(n/1e3).toLocaleString("fr-FR")+" k€";
+  if(!mt){ score+=12; raisons.push({ok:null,txt:"Montant non publié"}); }
+  else if(mt>=P.min&&mt<=P.max){ score+=20; raisons.push({ok:true,txt:"Taille adaptée ("+k(mt)+(parLot?" par lot environ":"")+")"}); }
+  else if(mt<P.min){ score+=10; raisons.push({ok:null,txt:"Petit marché ("+k(mt)+(parLot?" par lot":"")+")"}); }
+  else if(mt<=P.max*2){ score+=8; raisons.push({ok:null,txt:"Un peu gros pour vous ("+k(mt)+(parLot?" par lot":"")+")"}); }
+  else raisons.push({ok:false,txt:"Trop gros ("+k(mt)+(parLot?" par lot":"")+")"});
+  // Délai : 10
+  const j=joursRestants(m.limite);
+  if(j==null) score+=5;
+  else if(j<0) raisons.push({ok:false,txt:"Date limite passée"});
+  else if(j<5){ score+=2; raisons.push({ok:false,txt:"Moins de 5 jours pour répondre"}); }
+  else if(j<10){ score+=6; raisons.push({ok:null,txt:j+" jours pour répondre"}); }
+  else score+=10;
+  // Mots-clés : bonus 10, exclus = note plafonnée
+  const fav=motsListe(P.favoris).filter(w=>texte.includes(w));
+  if(fav.length){ score+=10; raisons.push({ok:true,txt:"Mot favori : "+fav.slice(0,3).join(", ")}); }
+  const exc=motsListe(P.exclus).filter(w=>texte.includes(w));
+  let exclu=false;
+  if(exc.length){ exclu=true; score=Math.min(score,15); raisons.unshift({ok:false,txt:"Mot à éviter : "+exc.slice(0,3).join(", ")}); }
+  return {score:Math.max(0,Math.min(100,Math.round(score))),raisons,exclu,perso:P.perso};
+}
+function niveauPert(s){ return s>=70?"haut":s>=45?"moyen":"bas"; }
+function badgePertinence(p,det){
+  const b=el("button",{type:"button",class:"badge pert pert-"+niveauPert(p.score),"aria-expanded":"false",title:"Pertinence pour votre entreprise. Cliquez pour le détail.\n"+p.raisons.map(r=>(r.ok?"✓ ":r.ok===false?"✗ ":"• ")+r.txt).join("\n")},"Pertinence "+p.score+" %");
+  b.onclick=()=>{ det.hidden=!det.hidden; b.setAttribute("aria-expanded",String(!det.hidden)); };
+  return b;
+}
+function detailPertinence(p){
+  return el("div",{class:"pert-detail",hidden:true},
+    el("ul",{},p.raisons.map(r=>el("li",{class:r.ok?"ok":r.ok===false?"ko":"neutre",text:r.txt}))),
+    el("button",{type:"button",class:"lien-plus",onclick:ouvrirProfil},p.perso?"Modifier mon profil entreprise":"Profil par défaut (BTP tous corps d'état, Île-de-France) : l'ajuster"));
+}
+function parPage(){ return $("#fTri")&&$("#fTri").value==="pertinence"?100:PAR_PAGE; }
+
+function ouvrirProfil(){
+  const P=profil(), metiers=[...P.metiers], deps=[...P.deps];
+  const fermer=()=>{ fond.remove(); document.removeEventListener("keydown",echap); };
+  const echap=e=>{ if(e.key==="Escape") fermer(); };
+  const f={
+    min:el("input",{type:"number",min:"0",step:"1000",value:String(P.min)}),
+    max:el("input",{type:"number",min:"0",step:"10000",value:String(P.max)}),
+    favoris:el("textarea",{rows:"2"}), exclus:el("textarea",{rows:"2",placeholder:"ex. fourniture seule, nettoyage, Corse"}),
+  };
+  f.favoris.value=P.favoris; f.exclus.value=P.exclus;
+  const types=Object.entries(TYPES_LIB).map(([k,lib])=>{ const c=el("input",{type:"checkbox",value:k}); c.checked=P.types.includes(k); return el("label",{class:"coche-ac"},c,lib); });
+  const cMet=el("div",{class:"multi"}), cDeps=el("div",{class:"multi"});
+  const form=el("form",{class:"captcha ajout",role:"dialog","aria-modal":"true","aria-label":"Mon profil entreprise"},
+    el("h3",{text:"Mon profil entreprise"}),
+    el("p",{class:"note-docs",text:"Sert à noter la pertinence de chaque marché sur 100 : métier (35), zone (25), taille (20), délai (10), type (10), et un bonus de 10 si un mot favori apparaît. Un mot à éviter plafonne la note à 15. Enregistré dans ce navigateur."}),
+    el("div",{class:"grille"},
+      el("div",{class:"large"},el("label",{},"Vos métiers"),cMet),
+      el("div",{class:"large"},el("label",{},"Départements où vous travaillez"),cDeps),
+      el("label",{},"Montant minimum par marché ou par lot (€ HT)",f.min),
+      el("label",{},"Montant maximum par marché ou par lot (€ HT)",f.max),
+      el("div",{class:"large",style:"display:flex;gap:14px;flex-wrap:wrap"},el("span",{style:"font-size:12.5px;font-weight:600;color:var(--bleu-fonce)"},"Types de marché :"),types),
+      el("label",{class:"large"},"Mots favoris (séparés par des virgules)",f.favoris),
+      el("label",{class:"large"},"Mots à éviter",f.exclus)),
+    el("div",{class:"actions"},
+      el("button",{type:"button",class:"btn",onclick:()=>{ try{ localStorage.removeItem(CLE_PROFIL); }catch(e){} fermer(); rafraichirNotes(); toast("Profil par défaut rétabli"); }},"Profil par défaut"),
+      el("button",{type:"button",class:"btn",onclick:fermer},"Annuler"),
+      el("button",{type:"submit",class:"btn btn-plein"},"Enregistrer")));
+  form.onsubmit=e=>{
+    e.preventDefault();
+    const min=nombre(f.min.value), max=nombre(f.max.value)||PROFIL_DEFAUT.max;
+    ecrire(CLE_PROFIL,{metiers,deps,types:[...form.querySelectorAll('input[type=checkbox][value]')].filter(c=>c.checked).map(c=>c.value),min:Math.min(min,max),max:Math.max(min,max),favoris:f.favoris.value,exclus:f.exclus.value});
+    fermer(); rafraichirNotes(); toast("Profil enregistré : notes de pertinence recalculées");
+  };
+  const fond=el("div",{class:"captcha-fond"},form);
+  fond.addEventListener("mousedown",e=>{ if(e.target===fond) fermer(); });
+  document.addEventListener("keydown",echap);
+  document.body.append(fond);
+  multiSelecteur(cMet,METIERS.map(x=>[x.id,x.nom]),metiers,"Aucun métier",()=>{});
+  multiSelecteur(cDeps,DEPS.map(([c,n])=>[c,c+" · "+n]),deps,"Toute la France",()=>{});
+}
+function rafraichirNotes(){ rechercher(etat.page); if(!$("#vue-suivi").hidden) afficherSuivi(); }
+
+/* ====================================================================
+   Historique des attributions de l'acheteur (DECP), dans l'encart
+   ==================================================================== */
+const cacheAttrib=new Map();
+function filtreAcheteur(m){
+  const s=(m.siretAcheteur||"").replace(/\D/g,"");
+  if(s.length>=9) return {w:"startswith(acheteur_id,"+q(s.slice(0,9))+")",par:"SIREN "+s.slice(0,9)};
+  return {w:"search(acheteur_nom,"+q(m.acheteur)+")",par:"nom"};
+}
+function prefixesCpv(m){
+  const p=new Set((m.cpv||[]).map(c=>String(c).replace(/\D/g,"").slice(0,4)).filter(c=>c.length===4));
+  if(!p.size) metiersCpvIds(m).forEach(id=>{ const x=METIERS.find(y=>y.id===id); if(x) x.cpv.forEach(c=>p.add(c.slice(0,4))); });
+  return [...p].slice(0,8);
+}
+function metiersCpvIds(m){ const ce=corpsEtat(m); return METIERS.filter(x=>ce.includes(x.nom.split(",")[0])).map(x=>x.id); }
+async function donneesAttributions(m){
+  if(cacheAttrib.has(m.idweb)) return cacheAttrib.get(m.idweb);
+  const fa=filtreAcheteur(m), d=new Date(); d.setFullYear(d.getFullYear()-5);
+  const periode="datenotification>=date'"+dateIso(d)+"'";
+  const ach=fa.w+" AND "+periode;
+  const pref=prefixesCpv(m), wCpv=pref.length?"("+pref.map(c=>"startswith(codecpv,"+q(c)+")").join(" OR ")+")":"";
+  const dep=(m.deps||[])[0];
+  const stat=w=>odsGet(API_DECP,{where:w,select:"count(*) as n, median(montant) as mediane, avg(montant) as moyenne, avg(offresrecues) as offres"}).catch(()=>odsGet(API_DECP,{where:w,select:"count(*) as n, avg(montant) as moyenne, avg(offresrecues) as offres"}));
+  const p=Promise.all([
+    stat(ach),
+    odsGet(API_DECP,{where:ach,select:"titulaire_denominationsociale_1 as nom, count(*) as n, sum(montant) as total",group_by:"titulaire_denominationsociale_1",order_by:"n desc",limit:"5"}).catch(()=>null),
+    wCpv?odsGet(API_DECP,{where:ach+" AND "+wCpv,select:DECP_CHAMPS,order_by:"datenotification desc",limit:"6"}).catch(()=>null):null,
+    odsGet(API_DECP,{where:ach,select:DECP_CHAMPS,order_by:"datenotification desc",limit:"6"}).catch(()=>null),
+    wCpv&&dep?stat(wCpv+" AND startswith(lieuexecution_code,"+q(dep)+") AND "+periode).catch(()=>null):null,
+  ]).then(([s,top,sim,dern,ref])=>({fa,pref,dep,s:s&&s.results&&s.results[0],top:(top&&top.results||[]).filter(r=>r.nom),sim:sim&&sim.results||[],dern:dern&&dern.results||[],ref:ref&&ref.results&&ref.results[0]}));
+  cacheAttrib.set(m.idweb,p); p.catch(()=>cacheAttrib.delete(m.idweb));
+  return p;
+}
+async function panneauAttributions(m,pan){
+  pan.innerHTML=""; pan.append(el("div",{class:"ia-attente"},el("span",{class:"rond"}),"Recherche des marchés déjà attribués par cet acheteur (DECP)…"));
+  try{
+    const D=await donneesAttributions(m);
+    pan.innerHTML="";
+    const n=D.s?Number(D.s.n)||0:0;
+    if(!n){
+      pan.append(el("p",{class:"ia-synthese",text:"Aucun marché attribué par « "+m.acheteur+" » dans les données publiques des 5 dernières années. Tous les acheteurs ne publient pas encore leurs données essentielles, ou le nom diffère : essayez l'onglet « Marchés attribués »."}));
+    }else{
+      const offres=D.s.offres!=null&&isFinite(D.s.offres)?Math.round(D.s.offres*10)/10:null;
+      const lead=D.top[0];
+      pan.append(el("p",{class:"ia-synthese",text:n+" marché"+(n>1?"s":"")+" attribué"+(n>1?"s":"")+" en 5 ans"+(D.s.mediane!=null?", montant médian "+euros(D.s.mediane):"")+(offres!=null?", "+offres.toLocaleString("fr-FR")+" offres reçues en moyenne":"")+"."+(lead&&lead.n>1?" L'entreprise qui gagne le plus souvent : "+lead.nom+" ("+lead.n+" marchés).":"")}));
+      const fiche=el("dl",{class:"ia-fiche"});
+      const f=(lib,v,cl)=>{ if(v) fiche.append(el("div",{class:cl||null},el("dt",{text:lib}),el("dd",{text:v}))); };
+      f("Marchés attribués (5 ans)",String(n));
+      f("Montant médian",D.s.mediane!=null?euros(D.s.mediane):"","montant");
+      f("Montant moyen",D.s.moyenne!=null?euros(D.s.moyenne):"","montant");
+      f("Concurrence",offres!=null?offres.toLocaleString("fr-FR")+" offres en moyenne":"");
+      if(D.ref&&Number(D.ref.n)) f("Prix constatés, même prestation dans le "+D.dep,(D.ref.mediane!=null?euros(D.ref.mediane)+" médian":euros(D.ref.moyenne)+" en moyenne")+" sur "+D.ref.n+" marchés"+(D.ref.offres!=null&&isFinite(D.ref.offres)?", "+(Math.round(D.ref.offres*10)/10).toLocaleString("fr-FR")+" offres":""),"montant");
+      pan.append(fiche);
+      if(D.top.length) pan.append(el("div",{class:"ia-bloc"},el("h4",{text:"Entreprises qui gagnent chez cet acheteur"}),
+        el("ol",{class:"top"},D.top.map(r=>el("li",{},el("span",{text:r.nom}),el("span",{text:r.n+" marché"+(r.n>1?"s":"")+(r.total?" · "+euros(r.total):"")}))))));
+      const lignes=D.sim.length?D.sim:D.dern;
+      if(lignes.length) pan.append(el("div",{class:"ia-bloc"},el("h4",{text:D.sim.length?"Derniers marchés similaires de cet acheteur":"Derniers marchés de cet acheteur"}),
+        el("div",{class:"table-defil"},el("table",{class:"ia-criteres"},
+          el("thead",{},el("tr",{},["Notifié","Objet","Titulaire","Montant","Offres"].map(t=>el("th",{text:t})))),
+          el("tbody",{},lignes.map(r=>el("tr",{},el("td",{text:r.datenotification?fmtDate(r.datenotification):"–"}),el("td",{text:r.objet||"–"}),el("td",{class:"gagnant",text:r.titulaire_denominationsociale_1||"non précisé"}),el("td",{class:"nombre",text:euros(r.montant)}),el("td",{class:"nombre",text:r.offresrecues!=null?String(r.offresrecues):"–"}))))))));
+    }
+    pan.append(el("div",{class:"docs"},el("button",{type:"button",class:"btn",onclick:()=>historiqueAcheteur(m)},"Tout l'historique de l'acheteur")),
+      el("p",{class:"note-docs",text:"Source : données essentielles de la commande publique (DECP), recherche par "+(D.fa.par==="nom"?"nom de l'acheteur (peut mélanger des homonymes)":D.fa.par)+". Pour un accord-cadre, le montant publié est souvent le maximum."}));
+  }catch(e){
+    pan.innerHTML="";
+    pan.append(el("div",{class:"ia-erreur"},el("p",{text:"Les marchés attribués n'ont pas pu être interrogés ("+(e.message||e)+")."}),el("button",{type:"button",class:"btn",onclick:()=>panneauAttributions(m,pan)},"Réessayer")));
+  }
+}
+
+/* ====================================================================
+   Suivi des offres (déposée, gagnée, perdue) et tableau de bord
+   ==================================================================== */
+const CLE_RESULTATS="vigie.resultats.v1";
+const ETAPES={prepa:"En préparation",depose:"Déposée",gagne:"Gagnée",perdu:"Perdue",sanssuite:"Sans suite",abandon:"Abandonnée"};
+let resultats=lire(CLE_RESULTATS,{});
+function sauverResultats(){ if(!ecrire(CLE_RESULTATS,resultats)) toast("Attention : ce navigateur bloque l'enregistrement local"); }
+function resumeMarche(m){ return {objet:m.objet,acheteur:m.acheteur,limite:m.limite||null,types:m.types||[],procedure:m.procedure||"",deps:m.deps||[]}; }
+function etapeDeTexte(t){
+  const x=sansAccent(String(t||"")).trim(); if(!x) return null;
+  if(/gagn|remport|retenu(?!.*non)|attribu/.test(x)&&!/non retenu|perdu/.test(x)) return "gagne";
+  if(/perdu|non retenu|rejet/.test(x)) return "perdu";
+  if(/sans suite|infructu|annul/.test(x)) return "sanssuite";
+  if(/abandon|ne repon/.test(x)) return "abandon";
+  if(/depos|remis|envoy/.test(x)) return "depose";
+  if(/prepa|en cours/.test(x)) return "prepa";
+  return null;
+}
+// sale : à recopier dans le tableau Excel à la prochaine synchro
+function majResultat(id,champs,sale=true){
+  const av=resultats[id]||{etape:"prepa"};
+  resultats[id]={...av,...champs,date:new Date().toISOString(),...(sale?{sale:true}:{})};
+  if(champs.etape&&champs.etape!==av.etape) resultats[id]["d_"+champs.etape]=new Date().toISOString();
+  sauverResultats();
+  if(!$("#vue-bord").hidden) afficherBord();
+}
+let minuterieRes;
+function synchroBientot(){ clearTimeout(minuterieRes); minuterieRes=setTimeout(()=>synchroTableau(false),4000); }
+function ligneSuiviOffre(m){
+  const res=resultats[m.idweb]||{etape:"prepa"};
+  const sel=el("select",{"aria-label":"Étape de l'offre"},Object.entries(ETAPES).map(([k,lib])=>el("option",{value:k,text:lib})));
+  sel.value=res.etape||"prepa";
+  const mt=el("input",{type:"text",inputmode:"numeric",placeholder:"ex. 185 000","aria-label":"Montant de l'offre en euros HT",value:res.montant?Number(res.montant).toLocaleString("fr-FR"):""});
+  const sauver=()=>{ majResultat(m.idweb,{etape:sel.value,montant:nombre(mt.value)||null,m:resumeMarche(m)}); ligne.className="suivi-offre etape-"+sel.value; synchroBientot(); };
+  sel.onchange=()=>{ sauver(); toast("Offre : « "+ETAPES[sel.value]+" »"); };
+  mt.onchange=()=>{ sauver(); if(mt.value) mt.value=nombre(mt.value).toLocaleString("fr-FR"); toast("Montant de l'offre enregistré"); };
+  const ligne=el("div",{class:"suivi-offre etape-"+(res.etape||"prepa")},
+    el("span",{class:"lib",text:"Suivi de l'offre"}),sel,
+    el("label",{},"Montant de l'offre",mt,"€ HT"),
+    el("span",{class:"note-docs",text:"Alimente le tableau de bord et la colonne Résultat du tableau Excel."}));
+  return ligne;
+}
+
+let bordPeriode="365";
+function initBord(){
+  const s=$("#bPeriode"); if(s) s.onchange=()=>{ bordPeriode=s.value; afficherBord(); };
+  const b=$("#bProfil"); if(b) b.onclick=ouvrirProfil;
+  const b2=$("#btnProfil"); if(b2) b2.onclick=ouvrirProfil;
+}
+function lignesBord(){
+  const ids=new Set([...Object.keys(resultats),...Object.entries(statuts).filter(([,s])=>s.statut==="reponse").map(([id])=>id)]);
+  const L=[];
+  for(const id of ids){
+    const r=resultats[id]||{etape:"prepa"}, s=statuts[id];
+    const m=r.m||(s&&s.m&&resumeMarche(s.m))||{objet:id,acheteur:""};
+    const ref=(m.limite&&new Date(m.limite))||(r.date&&new Date(r.date))||new Date();
+    L.push({id,etape:r.etape||"prepa",montant:Number(r.montant)||0,m,ref});
+  }
+  if(bordPeriode){
+    const debut=bordPeriode==="annee"?new Date(new Date().getFullYear(),0,1):new Date(Date.now()-Number(bordPeriode)*864e5);
+    return L.filter(x=>x.ref>=debut||x.etape==="prepa");
+  }
+  return L;
+}
+function afficherBord(){
+  const cont=$("#bordContenu"); if(!cont) return;
+  cont.innerHTML="";
+  const L=lignesBord(), nb=e=>L.filter(x=>x.etape===e).length;
+  const engages=L.filter(x=>x.etape!=="abandon"), deposes=L.filter(x=>["depose","gagne","perdu","sanssuite"].includes(x.etape));
+  const g=nb("gagne"), p=nb("perdu"), taux=g+p?Math.round(g/(g+p)*100):null;
+  const mGagne=L.filter(x=>x.etape==="gagne").reduce((a,x)=>a+x.montant,0);
+  const avecMt=deposes.filter(x=>x.montant), moy=avecMt.length?avecMt.reduce((a,x)=>a+x.montant,0)/avecMt.length:0;
+  const autres=Object.values(statuts).filter(s=>s.statut!=="reponse").length;
+  const tuile=(val,lib,sous,cl)=>el("div",{class:"encadre tuile"+(cl?" "+cl:"")},el("div",{class:"chiffre",text:val}),el("div",{class:"tuile-lib",text:lib}),sous?el("div",{class:"note-docs",text:sous}):null);
+  cont.append(el("div",{class:"tuiles"},
+    tuile(String(engages.length),"Réponses engagées",nb("prepa")+" en préparation"),
+    tuile(String(deposes.length),"Offres déposées",nb("depose")+" en attente de résultat"),
+    tuile(String(g),"Marchés gagnés",p+" perdu"+(p>1?"s":"")+(nb("sanssuite")?", "+nb("sanssuite")+" sans suite":""),"rouge"),
+    tuile(taux==null?"–":taux+" %","Taux de réussite",taux==null?"dès le premier résultat connu":"gagnés sur résultats connus"),
+    tuile(mGagne?euros(mGagne):"–","Montant gagné","somme des offres gagnées, HT"),
+    tuile(moy?euros(moy):"–","Offre moyenne",avecMt.length?"sur "+avecMt.length+" offre"+(avecMt.length>1?"s":"")+" chiffrée"+(avecMt.length>1?"s":""):"saisissez le montant sur l'encart")));
+  // Graphique mensuel : offres déposées par mois (gagnées en rouge)
+  cont.append(graphiqueMois(deposes));
+  // Prochaines remises
+  const prepa=L.filter(x=>x.etape==="prepa").sort((a,b)=>(a.m.limite||"9").localeCompare(b.m.limite||"9"));
+  const bloc=(titre,...e)=>el("div",{class:"encadre"},el("h2",{text:titre}),...e);
+  if(prepa.length) cont.append(bloc("Remises à venir",tableBord(prepa,true)));
+  const fini=L.filter(x=>x.etape!=="prepa").sort((a,b)=>b.ref-a.ref);
+  cont.append(bloc("Offres et résultats",fini.length?tableBord(fini,false):el("p",{class:"note-docs",text:"Aucune offre déposée pour l'instant. Sur un encart « J'y réponds », choisissez l'étape (Déposée, Gagnée, Perdue…) dans « Suivi de l'offre », ou remplissez la colonne Résultat du tableau Excel."})));
+  // Par acheteur
+  const parA=new Map(); deposes.forEach(x=>{ const k=x.m.acheteur||"?"; const a=parA.get(k)||{n:0,g:0,mt:0}; a.n++; if(x.etape==="gagne"){ a.g++; a.mt+=x.montant; } parA.set(k,a); });
+  if(parA.size) cont.append(bloc("Par acheteur",el("ol",{class:"top"},[...parA.entries()].sort((a,b)=>b[1].n-a[1].n).slice(0,10).map(([k,a])=>el("li",{},el("span",{text:k}),el("span",{text:a.n+" offre"+(a.n>1?"s":"")+" · "+a.g+" gagnée"+(a.g>1?"s":"")+(a.mt?" · "+euros(a.mt):"")}))))));
+  cont.append(el("p",{class:"note-docs",text:"Calculé à partir des statuts « J'y réponds » et du suivi de l'offre de chaque marché, enregistrés dans ce navigateur et repris de la colonne Résultat du tableau Excel. "+(autres?autres+" autre"+(autres>1?"s":"")+" marché"+(autres>1?"s":"")+" en lecture ou en réflexion. ":"")+"Les marchés en préparation sont toujours comptés, quelle que soit la période."}));
+}
+function tableBord(L,avenir){
+  return el("div",{class:"table-defil"},el("table",{class:"ia-criteres bord-table"},
+    el("thead",{},el("tr",{},[avenir?"Remise":"Date","Marché","Acheteur","Étape","Montant HT"].map(t=>el("th",{text:t})))),
+    el("tbody",{},L.map(x=>{
+      const j=joursRestants(x.m.limite);
+      const sel=el("select",{"aria-label":"Étape"},Object.entries(ETAPES).map(([k,lib])=>el("option",{value:k,text:lib}))); sel.value=x.etape;
+      sel.onchange=()=>{ majResultat(x.id,{etape:sel.value,m:x.m}); synchroBientot(); };
+      return el("tr",{},
+        el("td",{class:"nombre"},x.m.limite?fmtDate(x.m.limite):"–",avenir&&j!=null&&j>=0?el("small",{class:j<=7?"urgent":"",text:" J-"+j}):null),
+        el("td",{text:x.m.objet}),el("td",{text:x.m.acheteur||"–"}),el("td",{},sel),el("td",{class:"nombre",text:x.montant?euros(x.montant):"–"}));
+    }))));
+}
+function graphiqueMois(deposes){
+  const mois=[], auj=new Date();
+  for(let i=11;i>=0;i--){ const d=new Date(auj.getFullYear(),auj.getMonth()-i,1); mois.push({k:d.getFullYear()+"-"+d.getMonth(),lib:d.toLocaleDateString("fr-FR",{month:"short"}).replace(".",""),annee:d.getFullYear(),n:0,g:0}); }
+  deposes.forEach(x=>{ const d=x.ref, k=d.getFullYear()+"-"+d.getMonth(), mo=mois.find(y=>y.k===k); if(mo){ mo.n++; if(x.etape==="gagne") mo.g++; } });
+  const max=Math.max(1,...mois.map(x=>x.n));
+  const W=720,H=200,ml=28,mb=26,mt=10,bw=(W-ml)/12, hy=v=>mt+(H-mt-mb)*(1-v/max);
+  const NS="http://www.w3.org/2000/svg", s=(t,a,txt)=>{ const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); if(txt!=null) e.textContent=txt; return e; };
+  const svg=s("svg",{viewBox:"0 0 "+W+" "+H,class:"graph",role:"img","aria-label":"Offres déposées et gagnées par mois sur 12 mois"});
+  const pas=max<=4?1:Math.ceil(max/4);
+  for(let v=0;v<=max;v+=pas){ svg.append(s("line",{x1:ml,x2:W,y1:hy(v),y2:hy(v),class:"grille-l"}),s("text",{x:ml-6,y:hy(v)+4,"text-anchor":"end",class:"axe"},String(v))); }
+  const tip=el("div",{class:"tip",hidden:true});
+  mois.forEach((x,i)=>{
+    const x0=ml+i*bw+bw*.2, w=bw*.6;
+    if(x.n){
+      const y=hy(x.n), hTot=H-mb-y;
+      svg.append(s("path",{d:barre(x0,y,w,hTot),class:"barre-dep"}));
+      if(x.g){ const yg=hy(x.g); svg.append(s("path",{d:barre(x0,yg,w,H-mb-yg-0),class:"barre-gagne"})); }
+    }
+    svg.append(s("text",{x:x0+w/2,y:H-8,"text-anchor":"middle",class:"axe"},x.lib));
+    const zone=s("rect",{x:ml+i*bw,y:0,width:bw,height:H,fill:"transparent"});
+    zone.addEventListener("mouseenter",()=>{ tip.hidden=false; tip.textContent=x.lib+" "+x.annee+" : "+x.n+" déposée"+(x.n>1?"s":"")+", "+x.g+" gagnée"+(x.g>1?"s":""); tip.style.left=((ml+i*bw+bw/2)/W*100)+"%"; });
+    zone.addEventListener("mouseleave",()=>{ tip.hidden=true; });
+    svg.append(zone);
+  });
+  return el("div",{class:"encadre"},el("h2",{text:"Offres déposées par mois"}),
+    el("div",{class:"legende"},el("span",{class:"pastille-l dep"}),"Déposées",el("span",{class:"pastille-l gagne"}),"dont gagnées"),
+    el("div",{class:"graph-cont"},svg,tip));
+}
+function barre(x,y,w,h){ if(h<=0) return ""; const r=Math.min(4,h,w/2); return "M"+x+","+(y+h)+"V"+(y+r)+"Q"+x+","+y+" "+(x+r)+","+y+"H"+(x+w-r)+"Q"+(x+w)+","+y+" "+(x+w)+","+(y+r)+"V"+(y+h)+"Z"; }
+
 /* ====================================================================
    Marchés attribués : API DECP (data.economie.gouv.fr, Opendatasoft)
    ==================================================================== */
