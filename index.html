@@ -195,6 +195,37 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .manuels-tete{font:700 13px/1.3 var(--f-titre);color:var(--bleu);text-transform:uppercase;letter-spacing:.05em;padding:4px 2px}
 .manuels-tete small{display:block;text-transform:none;letter-spacing:0;font:400 12.5px var(--f-texte);color:var(--gris)}
 .badge.manuel{background:var(--rouge);color:var(--blanc)}
+/* Annonces du jour : rappels J-7 / J-2, résumé du matin, modifications */
+.annonces{max-width:1400px;margin:0 auto;padding:14px 20px 0;display:grid;gap:10px}
+.annonces:empty{display:none}
+@media (max-width:900px){.annonces{padding:10px 14px 0}}
+.annonce{background:var(--blanc);border:1.5px solid var(--bleu);border-left:6px solid var(--rouge);border-radius:10px;padding:10px 14px;display:grid;gap:6px}
+.annonce h2{margin:0;font:700 14px/1.3 var(--f-titre);color:var(--bleu);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.annonce h2 .fermer{margin-left:auto;border:0;background:none;color:var(--gris);cursor:pointer;font-size:18px;line-height:1;padding:0 4px}
+.annonce ul{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.annonce li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;font-size:13.5px}
+.annonce .jj{font:800 12px/1 var(--f-titre);border-radius:5px;padding:4px 7px;background:var(--ambre-clair);color:var(--ambre);white-space:nowrap}
+.annonce .jj.vite{background:var(--rouge);color:var(--blanc)}
+.annonce .lien{border:0;background:none;padding:0;color:var(--bleu-fonce);font-weight:600;cursor:pointer;text-align:left}
+.annonce .lien:hover{text-decoration:underline}
+.annonce .s{color:var(--gris);font-size:12.5px}
+.annonce .actions{display:flex;gap:8px;flex-wrap:wrap}
+.carte.eclaire{outline:3px solid var(--rouge);outline-offset:2px}
+.annonce .groupe{font:700 12px/1.3 var(--f-texte);text-transform:uppercase;letter-spacing:.05em;color:var(--rouge);margin-top:4px}
+.annonce .mini{border:1px solid var(--trait);background:var(--blanc);border-radius:6px;padding:1px 8px;font-size:12px;cursor:pointer;color:var(--gris)}
+.annonce .mini:hover{border-color:var(--rouge);color:var(--rouge)}
+.annonce.attente{border-left-color:var(--bleu-moyen)}
+.annonce .quoi{font:700 11px/1 var(--f-texte);text-transform:uppercase;letter-spacing:.05em;border-radius:5px;padding:4px 7px;background:var(--rouge-clair);color:var(--rouge);white-space:nowrap}
+.annonce .detail{flex-basis:100%;font-size:12.5px;color:var(--encre);margin:0 0 4px 0;padding-left:10px;border-left:3px solid var(--rouge-clair)}
+.badge.modifie{background:var(--ambre-clair);color:var(--ambre);box-shadow:inset 0 0 0 1.5px var(--ambre);cursor:help}
+/* menu Agenda d'un encart */
+.menu-agenda{position:relative}
+.menu-agenda>summary{list-style:none}
+.menu-agenda>summary::-webkit-details-marker{display:none}
+.menu-agenda .pop{position:absolute;z-index:30;bottom:calc(100% + 6px);left:0;min-width:250px;background:var(--blanc);border:1.5px solid var(--bleu-moyen);border-radius:8px;box-shadow:0 10px 30px rgba(13,34,87,.18);padding:6px;display:grid}
+.menu-agenda .pop a,.menu-agenda .pop button{display:block;text-align:left;border:0;background:none;padding:8px 10px;border-radius:6px;color:var(--bleu-fonce);font-weight:600;font-size:13px;text-decoration:none;cursor:pointer}
+.menu-agenda .pop a:hover,.menu-agenda .pop button:hover{background:var(--bleu-clair)}
+.menu-agenda .pop small{display:block;font-weight:400;color:var(--gris)}
 .ajout{width:min(640px,100%);max-height:calc(100vh - 32px);overflow:auto}
 .ajout .grille{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
 .ajout .grille .large{grid-column:1/-1}
@@ -295,6 +326,9 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
     </div>
   </div>
 </header>
+
+<!-- Rappels J-7 / J-2, résumé du matin, modifications des consultations suivies -->
+<div class="annonces" id="annonces" aria-live="polite"><div id="annRappels" hidden></div><div id="annMatin" hidden></div><div id="annModifs" hidden></div></div>
 
 <!-- ============ VUE RECHERCHE ============ -->
 <main class="page" id="vue-recherche">
@@ -401,6 +435,13 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
         <label class="btn" for="fichierImport">Restaurer une sauvegarde</label>
         <input type="file" id="fichierImport" accept=".json,application/json" hidden>
       </div>
+      <h3 class="sous-titre">Rappels et agenda</h3>
+      <p class="note-docs">Pour les marchés « En réflexion » et « J'y réponds », Vigie affiche un rappel en haut de la page à J-7 et J-2 de la remise des offres, et peut aussi vous envoyer une notification. Le bouton « 📅 Agenda » de chaque encart ajoute la date limite à Outlook ou Google Agenda ; le fichier .ics contient déjà les alertes J-7, J-2 et 2 heures avant, qui sonnent même Vigie fermé, y compris sur le téléphone.</p>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn" id="btnNotif" type="button">🔔 Activer les notifications</button><button class="btn btn-plein" id="btnIcsTous" type="button">📅 Ajouter tous mes marchés à l'agenda (.ics)</button></div>
+      <p class="note-docs" id="notifEtat" style="margin-top:4px"></p>
+      <h3 class="sous-titre">Rectificatifs et questions-réponses</h3>
+      <p class="note-docs">Chaque jour, Vigie vérifie les marchés de cette liste encore ouverts : avis rectificatifs ou d'annulation au BOAMP, date limite et taille du DCE sur la page de la consultation, et mails des plateformes (questions-réponses, report de date) lus pendant l'import des alertes. Un report de date met à jour le marché ; pensez à réajouter l'événement à l'agenda.</p>
+      <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn" id="btnModifs" type="button">Vérifier maintenant</button></div>
       <h3 class="sous-titre">Dossiers de réponse</h3>
       <p class="note-docs">Quand vous cliquez « J'y réponds », l'appli crée le dossier de la consultation dans OneDrive et y dépose le DCE dézippé.</p>
       <div id="blocMs" hidden>
@@ -940,6 +981,7 @@ function carte(m){
   const badges=el("div",{class:"badges"});
   if(m.manuel) badges.append(m.viaMail?el("span",{class:"badge manuel",title:"Ajouté depuis l'alerte « "+(m.viaMail.sujet||"")+" »",text:"Alerte mail"}):el("span",{class:"badge manuel",title:"Ajouté à la main à partir du lien de la consultation",text:"Ajouté par lien"}));
   if(visitePrecedente&&m.parution&&new Date(m.parution)>new Date(visitePrecedente)) badges.append(el("span",{class:"badge nouveau",text:"Nouveau"}));
+  { const ch=changementsDe(m.idweb); if(ch.length) badges.append(el("span",{class:"badge modifie",title:ch.map(x=>"• "+x.type+" ("+new Date(x.date).toLocaleDateString("fr-FR")+") : "+x.texte).join("\n"),text:"⚠ "+(ch.some(x=>!x.lu)?"Modifié":"Modifié (vu)")})); }
   m.types.forEach(t=>badges.append(el("span",{class:"badge "+t.toLowerCase(),text:t.charAt(0)+t.slice(1).toLowerCase()})));
   if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
   const plat=plateformeDe(m.urlDocs||m.urlDepot||m.urlProfil);
@@ -1014,6 +1056,7 @@ function carte(m){
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
   if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"));
+  if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
   const panneau=el("div",{class:"ia",hidden:true});
   const bIA=el("button",{class:"plus-ia",type:"button","aria-expanded":"false"},el("span",{class:"fleche",text:"▾"}),"En savoir plus : analyse du règlement de consultation");
@@ -2059,7 +2102,7 @@ function changerStatut(m,k){
   else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m)}; toast("« "+LIB_STATUT[k]+" » enregistré"); if(k==="reponse") preparerDossier(m).finally(()=>synchroTableau(false)); }
   if(!ecrire(CLE_STATUTS,statuts)) toast("Attention : ce navigateur bloque l'enregistrement local");
   document.querySelectorAll('.carte[data-id="'+CSS.escape(m.idweb)+'"]').forEach(c=>c.replaceWith(carte(m)));
-  majCompteSuivis();
+  majCompteSuivis(); afficherRappels();
   if(!$("#vue-suivi").hidden) afficherSuivi();
 }
 function majSnapshots(items){ let chg=false; items.forEach(m=>{ if(statuts[m.idweb]&&!manuels[m.idweb]){ statuts[m.idweb].m=snapshot(m); chg=true; } }); if(chg) ecrire(CLE_STATUTS,statuts); }
@@ -2232,6 +2275,11 @@ const MAIL_SCOPES=["Mail.Read"];
 // expéditeurs connus des alertes (domaine de l'adresse)
 const EXPEDITEURS_ALERTES=/(^|[@.])(boamp\.fr|dila\.gouv\.fr|marches-publics\.gouv\.fr|maximilien\.fr|aws-france\.com|aws-achat\.com|marches-publics\.info|achatsolutions\.fr|achatpublic\.com|achatpublic\.info|e-marchespublics\.com|marchesonline\.com|francemarches\.com|klekoon\.com|marches-securises\.fr|megalis\.bretagne\.bzh|local-trust\.com|atexo\.com|ted\.europa\.eu)$/i;
 // échanges sur une consultation (pas des alertes) : questions, compléments, rejets…
+// messages des plateformes sur une consultation suivie (questions-réponses, rectificatifs, report de date) : même règle que server/mail.js
+const SUJETS_MODIF=/question|r[ée]ponse|rectifi|modifi|report|prolong|compl[ée]ment d.information|information compl|mise [àa] jour|nouvelle version|nouveau document|dce|avis d.annulation|annul|message|courrier|correspondance/i;
+const SUJETS_HORS_MODIF=/non retenu|rejet|attribution|notification du march|accus[ée] de r[ée]ception|d[ée]p[ôo]t (de|du|d.une)|mot de passe|identifiant|confirmation d.inscription|n[ée]gociation|invitation/i;
+const SUJETS_ALERTE=/alerte|veille|nouvelle?s? (?:consultation|annonce|avis)|avis (?:de march[ée]|d.appel)|appels? d.offres/i;
+function estMessageSuivi(adr,sujet){ return EXPEDITEURS_ALERTES.test(String(adr||"").toLowerCase().split("@")[1]||"")&&SUJETS_MODIF.test(sujet||"")&&!SUJETS_HORS_MODIF.test(sujet||"")&&!SUJETS_ALERTE.test(sujet||""); }
 const SUJETS_ECHANGES=/non retenu|compl[ée]ment|notification|courrier aws|question|r[ée]ponse [àa]|rejet|attribution|n[ée]gociation|invitation|accus[ée] de r[ée]ception|d[ée]p[ôo]t|mot de passe|identifiant|compte|confirmation d.inscription/i;
 const LIBELLES_GENERIQUES=/^(voir|consulter|acc[ée]der|cliquez|ici|d[ée]tails?|en savoir plus|lien|t[ée]l[ée]charger|dce|r[èe]glement|voir l.avis|voir la consultation|plus d.informations?|https?:)/i;
 
@@ -2384,19 +2432,21 @@ function lireEml(brut){
 }
 
 /* --- Outlook / Microsoft 365 via Graph --- */
-async function alertesOutlook(depuisIso,etat){
-  if(!msCompte()&&!await msConnecter([...MS_SCOPES,...MAIL_SCOPES])) return null;
-  const jeton=await msJeton(true,MAIL_SCOPES); if(!jeton) return null;
+async function alertesOutlook(depuisIso,etat,silencieux){
+  if(silencieux){ await msInit().catch(()=>null); if(!msCompte()) return null; }
+  else if(!msCompte()&&!await msConnecter([...MS_SCOPES,...MAIL_SCOPES])) return null;
+  const jeton=await msJeton(!silencieux,MAIL_SCOPES); if(!jeton) return null;
   const H={Authorization:"Bearer "+jeton};
   const G="https://graph.microsoft.com/v1.0/me/messages";
   let url=G+"?"+new URLSearchParams({"$filter":"receivedDateTime ge "+depuisIso,"$orderby":"receivedDateTime desc","$select":"id,subject,from,receivedDateTime","$top":"100"});
-  const retenus=[]; let lus=0, echanges=0;
+  const retenus=[], suivisMsg=[]; let lus=0, echanges=0;
   for(let page=0;url&&page<15;page++){
     const r=await fetch(url,{headers:H}); const j=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error("Lecture de la boîte impossible : "+((j.error&&j.error.message)||r.status));
     for(const m of j.value||[]){
       lus++;
       const adr=((m.from&&m.from.emailAddress&&m.from.emailAddress.address)||"").toLowerCase();
+      if(estMessageSuivi(adr,m.subject)){ suivisMsg.push(m); continue; }
       const alerteParSujet=/alerte|veille|nouvelle?s? (?:consultation|annonce|avis)|avis (?:de march[ée]|d.appel)|appels? d.offres/i.test(m.subject||"");
       if(!EXPEDITEURS_ALERTES.test(adr.split("@")[1]||"")&&!alerteParSujet) continue;
       if(SUJETS_ECHANGES.test(m.subject||"")&&!/alerte|veille/i.test(m.subject||"")){ echanges++; continue; }
@@ -2414,7 +2464,20 @@ async function alertesOutlook(depuisIso,etat){
     const ea=(j.from&&j.from.emailAddress)||{};
     mails.push({id:j.id,sujet:j.subject||"",de:ea.address||"",nomDe:ea.name||"",date:j.receivedDateTime||"",html:j.body&&j.body.contentType==="html"?j.body.content:"",texte:j.body&&j.body.contentType!=="html"?j.body.content:""});
   }
-  return {mails,lus,echanges};
+  const messages=[];
+  for(const m of suivisMsg.slice(0,40)){
+    const r=await fetch(G+"/"+encodeURIComponent(m.id)+"?$select=id,subject,from,receivedDateTime,body",{headers:{...H,Prefer:'outlook.body-content-type="html"'}});
+    if(!r.ok) continue;
+    const j=await r.json().catch(()=>null); if(!j) continue;
+    const ea=(j.from&&j.from.emailAddress)||{};
+    messages.push(messageSimple({id:j.id,sujet:j.subject||"",de:ea.address||"",nomDe:ea.name||"",date:j.receivedDateTime||"",html:j.body&&j.body.contentType==="html"?j.body.content:"",texte:j.body&&j.body.contentType!=="html"?j.body.content:""}));
+  }
+  return {mails,messages,lus,echanges};
+}
+function messageSimple(m){ // texte et liens d'un message de plateforme
+  if(!m.html) return {...m,texte:String(m.texte||"").replace(/\s+/g," ").slice(0,4000),liens:[...(String(m.texte||"").match(/https?:\/\/[^\s<>"')\]]+/g)||[])].slice(0,30)};
+  const doc=new DOMParser().parseFromString(m.html,"text/html"); doc.querySelectorAll("script,style,head").forEach(n=>n.remove());
+  return {id:m.id,sujet:m.sujet,de:m.de,nomDe:m.nomDe,date:m.date,texte:texteDe(doc.body).replace(/\s+/g," ").slice(0,4000),liens:[...doc.querySelectorAll("a[href]")].map(a=>deballerLien(a.getAttribute("href"))).filter(Boolean).map(u=>String(u.href||u)).slice(0,30)};
 }
 
 /* --- autres messageries (IMAP) : Gmail, OVH, Orange, Free, Yahoo, iCloud… ---
@@ -2434,10 +2497,10 @@ const MESSAGERIES=[
   ["autre","Autre (indiquer le serveur IMAP)","",null],
 ];
 async function alertesImap(cfg,depuisIso){
-  const rep=await fetch(SERVEUR_DCE+"/mail/imap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hote:cfg.hote,port:993,utilisateur:cfg.utilisateur,motdepasse:cfg.motdepasse,depuis:depuisIso}),signal:AbortSignal.timeout(170000)});
+  const rep=await fetch(SERVEUR_DCE+"/mail/imap",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hote:cfg.hote,port:993,utilisateur:cfg.utilisateur,motdepasse:cfg.motdepasse,depuis:depuisIso,messages:true}),signal:AbortSignal.timeout(170000)});
   const j=await rep.json().catch(()=>({ok:false,message:"Réponse illisible du serveur ("+rep.status+")"}));
   if(!j.ok) throw new Error(j.message||"Lecture de la boîte impossible");
-  return {mails:j.mails||[],lus:j.parcourus||0,echanges:j.echanges||0};
+  return {mails:j.mails||[],messages:j.messages||[],lus:j.parcourus||0,echanges:j.echanges||0};
 }
 
 /* --- ajout automatique d'un marché trouvé dans une alerte --- */
@@ -2497,6 +2560,9 @@ function ouvrirImportMail(){
   const iHote=el("input",{type:"text",placeholder:"serveur IMAP (ex. imap.mondomaine.fr)"});
   const iMdp=el("input",{type:"password",placeholder:"mot de passe d'application",autocomplete:"current-password"});
   const iSouv=el("input",{type:"checkbox"});
+  const cbAuto=el("input",{type:"checkbox"}); cbAuto.checked=!memo.auto||memo.auto.actif!==false;
+  const noteAuto=()=>memo.auto&&memo.auto.actif?"Import automatique actif ("+(memo.auto.source==="outlook"?"Outlook":memo.auto.utilisateur||"IMAP")+")":"";
+  const reglerAuto=(source,cfg)=>{ memo.auto=cbAuto.checked?{actif:true,source,utilisateur:cfg&&cfg.utilisateur||""}:{actif:false}; };
   const bImap=el("button",{class:"btn btn-plein",type:"button"},"Chercher dans cette boîte");
   iType.value=imap.type||"gmail"; iAdr.value=imap.utilisateur||""; iHote.value=imap.hote||""; iMdp.value=imap.motdepasse||""; iSouv.checked=!!imap.souvenir;
   const majType=()=>{ const d=MESSAGERIES.find(x=>x[0]===iType.value); if(d&&d[2]) iHote.value=d[2]; iHote.hidden=iType.value!=="autre"&&iType.value!=="ovh"&&iType.value!=="ionos"; iMdp.placeholder=iType.value==="gmail"||iType.value==="yahoo"||iType.value==="icloud"?"mot de passe d'application (16 caractères)":"mot de passe de la boîte mail"; };
@@ -2507,6 +2573,7 @@ function ouvrirImportMail(){
     if(occupe) return;
     const cfg={type:iType.value,hote:iHote.value.trim(),utilisateur:iAdr.value.trim(),motdepasse:iMdp.value,souvenir:iSouv.checked};
     if(!cfg.utilisateur||!cfg.motdepasse||!cfg.hote){ dire("Indiquez l'adresse, le mot de passe"+(iHote.hidden?"":" et le serveur IMAP")+".","ko"); return; }
+    if(cbAuto.checked&&!cfg.souvenir){ dire("Pour l'import automatique de chaque matin, cochez aussi « Se souvenir du mot de passe sur cet appareil » (ou décochez l'import automatique).","ko"); return; }
     ecrire(CLE_IMAP,{...cfg,motdepasse:cfg.souvenir?cfg.motdepasse:""});
     occupe=true; bImap.disabled=true;
     const jours=periode.value==="dernier"?null:+periode.value;
@@ -2514,7 +2581,8 @@ function ouvrirImportMail(){
     try{
       dire("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
       const r=await alertesImap(cfg,depuis.toISOString());
-      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      memo.dernier=new Date().toISOString(); reglerAuto("imap",cfg); ecrire(CLE_MAIL,memo);
+      const nm=traiterMessagesSuivi(r.messages); if(nm) toast(nm+" modification"+(nm>1?"s":"")+" trouvée"+(nm>1?"s":"")+" sur vos marchés suivis");
       ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
     }catch(e){ dire(e.name==="TimeoutError"?"La messagerie met trop de temps à répondre : réessayez avec une période plus courte.":e.message,"ko"); }
     finally{ occupe=false; bImap.disabled=false; }
@@ -2578,7 +2646,8 @@ function ouvrirImportMail(){
       dire("⏳ Connexion à Outlook…");
       const r=await alertesOutlook(depuis.toISOString(),t=>dire(t));
       if(!r){ dire("Connexion à Outlook annulée.","ko"); return; }
-      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      memo.dernier=new Date().toISOString(); reglerAuto("outlook"); ecrire(CLE_MAIL,memo);
+      const nm=traiterMessagesSuivi(r.messages); if(nm) toast(nm+" modification"+(nm>1?"s":"")+" trouvée"+(nm>1?"s":"")+" sur vos marchés suivis");
       ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
     }catch(e){ dire(e.message+(/Mail\.Read|consent|AADSTS65001|Access is denied|403/i.test(e.message)?" — l'autorisation de lire les mails n'a pas été accordée.":""),"ko"); }
     finally{ occupe=false; bOutlook.disabled=false; }
@@ -2644,6 +2713,7 @@ function ouvrirImportMail(){
     el("h3",{text:"Importer les alertes mail des plateformes"}),
     el("p",{class:"note",text:"Vigie repère dans les alertes de BOAMP, PLACE, Maximilien, AWS-Achat, achatpublic, e-marchespublics… les liens des consultations, puis les ajoute comme « Ajouter un marché par son lien ». Avec Outlook, vos mails sont lus par votre navigateur ; avec Gmail et les autres messageries, le serveur Vigie les lit le temps de l'import, sans rien garder."}),
     el("div",{class:"ligne"},el("span",{class:"note",text:"Période :"}),periode,el("a",{href:"aide/connexions.html#mail",target:"_blank",rel:"noopener",class:"btn"},"Procédure pas à pas")),
+    el("label",{class:"note",style:"display:flex;gap:6px;align-items:flex-start"},cbAuto,el("span",{},el("strong",{text:"Importer automatiquement chaque matin"})," : à la première ouverture de Vigie de la journée, la boîte est relue et les nouveaux marchés sont ajoutés, avec un résumé en haut de la page. "+noteAuto())),
     msConfigure()?el("div",{class:"bloc"},
       el("h4",{text:"Outlook, Hotmail, Microsoft 365"}),
       el("div",{class:"ligne"},bOutlook),
@@ -2667,6 +2737,495 @@ function ouvrirImportMail(){
   if(msConfigure()) msInit().catch(()=>{});
 }
 
+
+/* ====================================================================
+   Rappels J-7 / J-2 et agenda (Outlook, Google, fichier .ics)
+   - les marchés « En réflexion » et « J'y réponds » dont la remise des offres approche
+     s'affichent en haut de la page, et donnent une notification du navigateur si elle est permise ;
+   - « 📅 Agenda » ajoute la date limite au calendrier. Le .ics porte les alertes J-7, J-2 et H-2,
+     donc l'agenda prévient même quand Vigie est fermé.
+   ==================================================================== */
+const CLE_RAPPELS="vigie.rappels.v1";
+const STATUTS_RAPPEL=["reflexion","reponse"];
+const SEUILS_RAPPEL=[7,2,0];
+function suivisARappeler(){
+  return Object.values(statuts).filter(s=>STATUTS_RAPPEL.includes(s.statut)&&s.m&&s.m.limite)
+    .map(s=>({m:manuels[s.m.idweb]||s.m,statut:s.statut,j:joursRestants((manuels[s.m.idweb]||s.m).limite)}))
+    .filter(x=>x.j!=null&&x.j>=0&&x.j<=7).sort((a,b)=>a.m.limite.localeCompare(b.m.limite));
+}
+function libJ(j){ return j===0?"Aujourd'hui":j===1?"Demain":"J-"+j; }
+function sansHeure(iso){ return !/T\d\d:\d\d/.test(iso||"")||/T00:00(:00)?(\.000)?(Z|[+-]00:?00)?$/.test(iso); }
+function montrerCarte(m){
+  // ouvre l'onglet Mes marchés si le marché y est, et met l'encart en évidence
+  const viser=()=>document.querySelector('#'+(statuts[m.idweb]?"listeSuivi":"liste")+' .carte[data-id="'+CSS.escape(m.idweb)+'"]')||document.querySelector('.carte[data-id="'+CSS.escape(m.idweb)+'"]');
+  if(statuts[m.idweb]){ filtreSuivi=""; changerVue("suivi"); afficherSuivi(); }
+  const c=viser(); if(!c){ toast("Marché introuvable dans la liste affichée"); return; }
+  c.scrollIntoView({behavior:"smooth",block:"center"}); c.classList.add("eclaire"); setTimeout(()=>c.classList.remove("eclaire"),2500);
+}
+function afficherRappels(){
+  const zone=$("#annRappels"); if(!zone) return;
+  const memo=lire(CLE_RAPPELS,{ferme:null,envoyes:{}});
+  const liste=suivisARappeler();
+  zone.innerHTML=""; zone.className="annonce";
+  if(!liste.length||memo.ferme===dateIso(new Date())){ zone.hidden=true; return; }
+  zone.hidden=false;
+  const fermer=el("button",{class:"fermer",type:"button",title:"Masquer jusqu'à demain","aria-label":"Masquer jusqu'à demain",text:"×"});
+  fermer.onclick=()=>{ const x=lire(CLE_RAPPELS,{envoyes:{}}); x.ferme=dateIso(new Date()); ecrire(CLE_RAPPELS,x); zone.hidden=true; };
+  zone.append(el("h2",{},"⏰ Remise des offres dans moins de 8 jours ("+liste.length+")",fermer),
+    el("ul",{},liste.map(({m,statut,j})=>el("li",{},
+      el("span",{class:"jj"+(j<=2?" vite":""),text:libJ(j)}),
+      el("button",{class:"lien",type:"button",onclick:()=>montrerCarte(m),text:m.objet}),
+      el("span",{class:"s",text:[m.acheteur,LIB_STATUT[statut],"remise "+fmtDate(m.limite,true)].filter(Boolean).join(" · ")}),
+      menuAgenda(m,true)))));
+}
+function notifier(titre,corps,tag,surClic){
+  try{
+    if(!("Notification" in window)||Notification.permission!=="granted") return false;
+    const n=new Notification(titre,{body:corps,tag,icon:"extension/icone128.png"});
+    n.onclick=()=>{ window.focus(); if(surClic) surClic(); n.close(); };
+    return true;
+  }catch(e){ return false; }
+}
+function verifierRappels(){
+  afficherRappels();
+  const memo=lire(CLE_RAPPELS,{ferme:null,envoyes:{}}); memo.envoyes=memo.envoyes||{};
+  let chg=false;
+  for(const {m,j} of suivisARappeler()){
+    const seuil=SEUILS_RAPPEL.find(x=>j<=x&&(SEUILS_RAPPEL[SEUILS_RAPPEL.indexOf(x)+1]??-1)<j); // 7 (J-7..J-3), 2 (J-2, J-1), 0 (jour J)
+    const cle=m.idweb+"|"+m.limite+"|"+seuil;
+    if(memo.envoyes[cle]) continue;
+    if(notifier("Vigie · "+libJ(j)+" : remise des offres",m.objet+"\n"+(m.acheteur||"")+" · "+fmtDate(m.limite,true),"vigie-"+m.idweb,()=>montrerCarte(m))){ memo.envoyes[cle]=dateIso(new Date()); chg=true; }
+  }
+  // ménage : on oublie les rappels de plus de 60 jours
+  const limiteMenage=dateIso(new Date(Date.now()-60*864e5));
+  for(const [k,d] of Object.entries(memo.envoyes)) if(d<limiteMenage){ delete memo.envoyes[k]; chg=true; }
+  if(chg) ecrire(CLE_RAPPELS,memo);
+}
+function majNotif(){
+  const b=$("#btnNotif"), e=$("#notifEtat"); if(!b) return;
+  if(!("Notification" in window)){ b.disabled=true; e.textContent="Ce navigateur ne gère pas les notifications : fiez-vous aux alertes de l'agenda."; return; }
+  const p=Notification.permission;
+  b.disabled=p!=="default";
+  b.textContent=p==="granted"?"🔔 Notifications activées":"🔔 Activer les notifications";
+  e.textContent=p==="granted"?"Vous recevrez une notification à J-7, J-2 et le jour J, à l'ouverture de Vigie (gardez un onglet Vigie ouvert pour les recevoir dans la journée).":p==="denied"?"Notifications bloquées par le navigateur : autorisez-les dans le cadenas à gauche de l'adresse du site.":"";
+}
+/* --- agenda --- */
+function icsDate(d){ return d.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,""); }
+function icsJour(d){ return dateIso(d).replace(/-/g,""); }
+function icsTexte(t){ return String(t||"").replace(/\\/g,"\\\\").replace(/;/g,"\;").replace(/,/g,"\\,").replace(/\r?\n/g,"\\n"); }
+function icsPlier(l){ // lignes de 75 octets au plus (RFC 5545)
+  const o=[]; let cur="", n=0;
+  for(const ch of l){ const b=new TextEncoder().encode(ch).length; if(n+b>(o.length?74:75)){ o.push(cur); cur=""; n=0; } cur+=ch; n+=b; }
+  o.push(cur); return o.join("\r\n ");
+}
+function lienMarche(m){ return m.lienSaisi||m.urlDocs||m.urlDepot||m.urlAvis||m.urlProfil||""; }
+function infosEvenement(m){
+  const d=new Date(m.limite), jour=sansHeure(m.limite);
+  const debut=jour?d:new Date(d.getTime()-36e5), fin=jour?new Date(d.getTime()+864e5):d;
+  const titre="Remise des offres : "+m.objet;
+  const details=[m.acheteur&&"Acheteur : "+m.acheteur, "Date limite : "+fmtDate(m.limite,true), m.refAcheteur&&"Référence : "+m.refAcheteur, lienMarche(m)&&"Consultation : "+lienMarche(m), "Ajouté depuis Vigie Marchés : "+location.origin+location.pathname].filter(Boolean).join("\n");
+  return {debut,fin,jour,titre,details,lieu:m.lieu||m.villeAcheteur||""};
+}
+function evenementIcs(m){
+  const e=infosEvenement(m);
+  const l=["BEGIN:VEVENT","UID:vigie-"+String(m.idweb).replace(/[^\w.-]/g,"")+"@vigie-marches","DTSTAMP:"+icsDate(new Date()),
+    "SEQUENCE:"+Math.floor(Date.now()/6e4%2e9), // toujours croissant : réimporter met l'événement à jour
+    e.jour?"DTSTART;VALUE=DATE:"+icsJour(e.debut):"DTSTART:"+icsDate(e.debut),
+    e.jour?"DTEND;VALUE=DATE:"+icsJour(e.fin):"DTEND:"+icsDate(e.fin),
+    "SUMMARY:"+icsTexte(e.titre),"DESCRIPTION:"+icsTexte(e.details)];
+  if(e.lieu) l.push("LOCATION:"+icsTexte(e.lieu));
+  if(lienMarche(m)) l.push("URL:"+lienMarche(m));
+  l.push("TRANSP:TRANSPARENT","CATEGORIES:Appels d'offres");
+  for(const [avant,lib] of [["-P7D","J-7"],["-P2D","J-2"],[e.jour?"-PT0M":"-PT2H",e.jour?"jour J":"dans 2 heures"]])
+    l.push("BEGIN:VALARM","ACTION:DISPLAY","TRIGGER:"+avant,"DESCRIPTION:"+icsTexte(lib+" : remise des offres « "+m.objet+" »"),"END:VALARM");
+  l.push("END:VEVENT");
+  return l;
+}
+function fichierIcs(marches,nom){
+  const l=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Vigie Marches//Rappels//FR","CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Appels d'offres (Vigie)"];
+  marches.forEach(m=>l.push(...evenementIcs(m)));
+  l.push("END:VCALENDAR");
+  const blob=new Blob([l.map(icsPlier).join("\r\n")+"\r\n"],{type:"text/calendar;charset=utf-8"});
+  const a=el("a",{href:URL.createObjectURL(blob),download:nom}); document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+function nomIcs(m){ return ("remise-offres-"+designation(m.objet||"marche")).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^\w-]+/g,"-").replace(/-+/g,"-").slice(0,60)+".ics"; }
+function lienGoogle(m){
+  const e=infosEvenement(m);
+  const dates=e.jour?icsJour(e.debut)+"/"+icsJour(e.fin):icsDate(e.debut)+"/"+icsDate(e.fin);
+  return "https://calendar.google.com/calendar/render?"+new URLSearchParams({action:"TEMPLATE",text:e.titre,dates,details:e.details,location:e.lieu,ctz:"Europe/Paris"});
+}
+function lienOutlook(m,perso){
+  const e=infosEvenement(m);
+  const p={path:"/calendar/action/compose",rru:"addevent",subject:e.titre,body:e.details.replace(/\n/g,"<br>"),location:e.lieu,startdt:e.jour?dateIso(e.debut):e.debut.toISOString(),enddt:e.jour?dateIso(e.fin):e.fin.toISOString()};
+  if(e.jour) p.allday="true";
+  return "https://outlook."+(perso?"live.com":"office.com")+"/calendar/0/deeplink/compose?"+new URLSearchParams(p);
+}
+function menuAgenda(m,petit){
+  const d=el("details",{class:"menu-agenda"});
+  const ic=el("button",{type:"button",onclick:()=>{ fichierIcs([m],nomIcs(m)); d.open=false; toast("Ouvrez le fichier .ics téléchargé pour l'ajouter à l'agenda"); }},"Fichier .ics (Outlook, Apple, autres)",el("small",{text:"avec alertes J-7, J-2 et 2 h avant"}));
+  const lien=(href,lib,aide)=>el("a",{href,target:"_blank",rel:"noopener",onclick:()=>{ d.open=false; }},lib,aide?el("small",{text:aide}):null);
+  d.append(el("summary",{class:"btn",style:petit?"padding:2px 8px;font-size:12px":"",title:"Ajouter la date limite à votre agenda"},"📅 Agenda"),
+    el("div",{class:"pop"},
+      ic,
+      lien(lienOutlook(m,false),"Outlook (Microsoft 365, pro)","ajoutez vous-même le rappel"),
+      lien(lienOutlook(m,true),"Outlook.com / Hotmail (perso)"),
+      lien(lienGoogle(m),"Google Agenda","ajoutez vous-même le rappel")));
+  d.addEventListener("toggle",()=>{ if(d.open) document.querySelectorAll(".menu-agenda[open]").forEach(x=>{ if(x!==d) x.open=false; }); });
+  return d;
+}
+document.addEventListener("click",e=>{ if(!e.target.closest(".menu-agenda")) document.querySelectorAll(".menu-agenda[open]").forEach(x=>x.open=false); });
+function icsTousMesMarches(){
+  const ms=Object.values(statuts).filter(s=>STATUTS_RAPPEL.includes(s.statut)&&s.m&&s.m.limite&&joursRestants(s.m.limite)>=0).map(s=>manuels[s.m.idweb]||s.m);
+  if(!ms.length){ toast("Aucun marché « En réflexion » ou « J'y réponds » avec une date limite à venir"); return; }
+  fichierIcs(ms,"vigie-mes-marches-"+dateIso(new Date())+".ics");
+  toast(ms.length+" marché"+(ms.length>1?"s":"")+" : ouvrez le fichier .ics pour les ajouter à l'agenda");
+}
+function initRappels(){
+  const bn=$("#btnNotif"); if(bn) bn.onclick=async()=>{ try{ await Notification.requestPermission(); }catch(e){} majNotif(); verifierRappels(); };
+  const bi=$("#btnIcsTous"); if(bi) bi.onclick=icsTousMesMarches;
+  majNotif(); verifierRappels();
+  setInterval(verifierRappels,36e5); // un onglet resté ouvert prévient aussi dans la journée
+}
+
+
+/* ====================================================================
+   Import automatique du matin
+   À la première ouverture de Vigie de la journée (ou au changement de jour si l'onglet est resté ouvert),
+   la boîte choisie dans « Importer les alertes mail » est relue sans rien demander :
+   - Outlook : jeton Microsoft déjà accordé (lecture seule) ;
+   - Gmail et autres : mot de passe d'application mémorisé sur cet appareil.
+   Les nouvelles consultations sont ajoutées, puis résumées en haut de la page :
+   d'abord celles qui correspondent à votre profil ou à vos filtres, ensuite les autres.
+   ==================================================================== */
+const HEURE_MATIN=6;
+let importAutoEnCours=false;
+function estPertinent(m){
+  try{ if(typeof notePertinence==="function"){ const n=notePertinence(m)||{}; return !n.exclu&&(n.score||0)>=60; } }catch(e){}
+  return manuelsFiltres().some(x=>x.idweb===m.idweb);
+}
+function nouvellesConsultations(mails,memo){
+  const vues=new Set(), maintenant=new Date(), r=[];
+  for(const mail of mails) for(const c of consultationsDuMail(mail)){
+    if(vues.has(c.cle)) continue; vues.add(c.cle);
+    if(c.limite&&new Date(c.limite)<maintenant) continue;
+    if(dejaDansVigie(c)||memo.ignores[c.cle]) continue;
+    r.push(c);
+  }
+  return r;
+}
+function afficherMatin(texteAttente){
+  const zone=$("#annMatin"); if(!zone) return;
+  zone.innerHTML=""; zone.className="annonce"+(texteAttente?" attente":"");
+  if(texteAttente){ zone.hidden=false; zone.append(el("h2",{text:"✉ Import du matin"}),el("p",{class:"note-docs",text:texteAttente})); return; }
+  const memo=lire(CLE_MAIL,{}); const r=memo.resume;
+  if(!r||r.date!==dateIso(new Date())||r.ferme){ zone.hidden=true; return; }
+  const ms=(r.ids||[]).map(id=>manuels[id]).filter(Boolean);
+  const fermer=el("button",{class:"fermer",type:"button",title:"Masquer le résumé","aria-label":"Masquer le résumé",text:"×"});
+  fermer.onclick=()=>{ const x=lire(CLE_MAIL,{}); if(x.resume) x.resume.ferme=true; ecrire(CLE_MAIL,x); zone.hidden=true; };
+  zone.hidden=false;
+  const h=new Date(r.heure||Date.now()).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  if(r.erreur){
+    zone.append(el("h2",{},"✉ Import du matin impossible",fermer),el("p",{class:"note-docs",text:r.erreur}),
+      el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:()=>ouvrirImportMail()},"Ouvrir l'import des alertes")));
+    return;
+  }
+  if(!ms.length){ zone.append(el("h2",{},"✉ Import du matin ("+h+") : aucun nouveau marché"+(r.lus?" dans "+r.lus+" mails":""),fermer)); return; }
+  const pert=ms.filter(estPertinent), autres=ms.filter(m=>!pert.includes(m));
+  const ligne=m=>{
+    const j=joursRestants(m.limite);
+    const retirer=el("button",{class:"mini",type:"button",title:"Retirer ce marché de Vigie (il ne sera plus proposé)",text:"Retirer"});
+    retirer.onclick=()=>{ delete manuels[m.idweb]; sauverManuels(); const x=lire(CLE_MAIL,{ignores:{}}); x.ignores=x.ignores||{}; if(m.cleMail) x.ignores[m.cleMail]=1; ecrire(CLE_MAIL,x); afficherManuels(); afficherMatin(); };
+    return el("li",{},
+      el("span",{class:"jj"+(j!=null&&j<=7?" vite":""),text:j==null?"date ?":j<0?"clos":libJ(j)}),
+      el("button",{class:"lien",type:"button",onclick:()=>montrerCarte(m),text:m.objet}),
+      el("span",{class:"s",text:[m.acheteur,m.deps&&m.deps.join(", ")].filter(Boolean).join(" · ")}),retirer);
+  };
+  zone.append(el("h2",{},"✉ Import du matin ("+h+") : "+ms.length+" nouveau"+(ms.length>1?"x":"")+" marché"+(ms.length>1?"s":"")+(pert.length?", dont "+pert.length+" pertinent"+(pert.length>1?"s":""):""),fermer));
+  if(pert.length) zone.append(el("div",{class:"groupe",text:"Correspondent à vos "+(typeof notePertinence==="function"?"critères":"filtres de recherche")}),el("ul",{},pert.map(ligne)));
+  if(autres.length){
+    const d=el("details",{},el("summary",{class:"groupe",style:"cursor:pointer",text:"Autres marchés importés ("+autres.length+")"}),el("ul",{},autres.map(ligne)));
+    if(!pert.length) d.open=true;
+    zone.append(d);
+  }
+}
+async function importAutomatique(force){
+  if(importAutoEnCours) return;
+  const memo=lire(CLE_MAIL,{dernier:null,ignores:{}}); memo.ignores=memo.ignores||{};
+  const auto=memo.auto;
+  if(!auto||!auto.actif) return;
+  const auj=dateIso(new Date());
+  if(!force&&(memo.essaiAuto===auj||(memo.resume&&memo.resume.date===auj))) return;
+  if(!force&&new Date().getHours()<HEURE_MATIN) return;
+  importAutoEnCours=true;
+  memo.essaiAuto=auj; ecrire(CLE_MAIL,memo);
+  const depuis=new Date(Math.max(Date.now()-14*864e5,memo.dernier?new Date(memo.dernier).getTime()-864e5:Date.now()-3*864e5));
+  const fin=(resume)=>{ const x=lire(CLE_MAIL,memo); x.resume={date:auj,heure:new Date().toISOString(),...resume}; ecrire(CLE_MAIL,x); importAutoEnCours=false; afficherMatin(); };
+  try{
+    let r=null;
+    afficherMatin("⏳ Lecture des alertes reçues depuis le "+depuis.toLocaleDateString("fr-FR")+"…");
+    if(auto.source==="outlook"){
+      if(!msConfigure()) return fin({erreur:"La connexion Outlook n'est pas disponible sur ce site."});
+      r=await alertesOutlook(depuis.toISOString(),t=>afficherMatin(t),true);
+      if(!r) return fin({erreur:"Microsoft demande de vous reconnecter : ouvrez « Importer les alertes mail » et cliquez « Se connecter et chercher dans Outlook »."});
+    }else{
+      const cfg=lire(CLE_IMAP,{});
+      if(!cfg.motdepasse) return fin({erreur:"Le mot de passe de la boîte "+(cfg.utilisateur||"")+" n'est pas mémorisé sur cet appareil : ouvrez « Importer les alertes mail », cochez « Se souvenir du mot de passe » et lancez un import."});
+      afficherMatin("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
+      r=await alertesImap(cfg,depuis.toISOString());
+    }
+    const x=lire(CLE_MAIL,memo); x.dernier=new Date().toISOString(); ecrire(CLE_MAIL,x);
+    const cs=nouvellesConsultations(r.mails,x);
+    const ids=[];
+    for(const [i,c] of cs.entries()){
+      afficherMatin("⏳ Ajout des nouveaux marchés : "+(i+1)+" / "+cs.length+"…");
+      try{ const a=await ajouterDepuisAlerte(c); if(a&&a.m) ids.push(a.m.idweb); }catch(e){}
+    }
+    traiterMessagesSuivi(r.messages);
+    afficherManuels();
+    if(ids.length) notifier("Vigie · "+ids.length+" nouveau"+(ids.length>1?"x":"")+" marché"+(ids.length>1?"s":""),"Import du matin : "+ids.map(id=>manuels[id]&&manuels[id].objet).filter(Boolean).slice(0,3).join(" · "),"vigie-matin");
+    fin({ids,lus:r.lus||0});
+  }catch(e){ fin({erreur:"L'import du matin a échoué : "+(e.name==="TimeoutError"?"la messagerie met trop de temps à répondre.":e.message)}); }
+  finally{ importAutoEnCours=false; }
+}
+function initImportAuto(){
+  afficherMatin();
+  setTimeout(()=>importAutomatique(false),2500);
+  setInterval(()=>importAutomatique(false),30*6e4); // onglet resté ouvert : l'import part au changement de jour
+}
+
+
+/* ====================================================================
+   Suivi des rectificatifs et des questions-réponses
+   Une fois par jour, pour les marchés de « Mes marchés » encore ouverts :
+   1) BOAMP : avis rectificatifs, avis modifiés (eForms) ou annulations liés à l'avis suivi (champ annonce_lie) ;
+   2) page de la consultation (PLACE, Maximilien, Atexo, AWS, achatpublic…) relue par le serveur Vigie :
+      date limite et taille du RC / du DCE comparées à la dernière lecture ;
+   3) mails des plateformes (questions-réponses, rectificatifs, report) lus lors de l'import des alertes.
+   Un changement de date limite met à jour le marché (rappels et agenda suivent).
+   ==================================================================== */
+const CLE_RECTIF="vigie.rectif.v1";
+let rectif=lire(CLE_RECTIF,{dernier:null,par:{}}); rectif.par=rectif.par||{};
+function sauverRectif(){ ecrire(CLE_RECTIF,rectif); }
+function changementsDe(id){ return (rectif.par[id]&&rectif.par[id].changements)||[]; }
+function marchesSuivisOuverts(){
+  const auj=new Date(); auj.setHours(0,0,0,0);
+  return Object.values(statuts).map(s=>manuels[s.m&&s.m.idweb]||s.m).filter(m=>m&&m.idweb&&(!m.limite||new Date(m.limite)>=auj));
+}
+function ajouterChangement(m,ch){
+  const r=rectif.par[m.idweb]=rectif.par[m.idweb]||{changements:[]};
+  r.changements=r.changements||[];
+  if(r.changements.some(x=>x.cle===ch.cle)) return false;
+  r.changements.unshift({...ch,date:ch.date||new Date().toISOString(),lu:false,objet:m.objet});
+  r.changements=r.changements.slice(0,30);
+  return true;
+}
+function changerLimite(m,iso,source){
+  if(!iso||!m.limite||Math.abs(new Date(iso)-new Date(m.limite))<6e4) return null;
+  const avant=m.limite;
+  const appliquer=x=>{ if(x){ x.limiteInitiale=x.limiteInitiale||avant; x.limite=iso; } };
+  if(manuels[m.idweb]){ appliquer(manuels[m.idweb]); sauverManuels(); }
+  if(statuts[m.idweb]){ appliquer(statuts[m.idweb].m); ecrire(CLE_STATUTS,statuts); }
+  appliquer(m);
+  return "Date limite "+(new Date(iso)>new Date(avant)?"reportée":"avancée")+" : du "+fmtDate(avant,true)+" au "+fmtDate(iso,true)+" ("+source+")";
+}
+// Nouvelle date limite dans la phrase d'un rectificatif → ISO (heure de Paris). Formes rencontrées au BOAMP :
+// « Au lieu de 27/11/2026 à 12h00, lire 04/12/2026 à 12h00 », « reportée au vendredi 11 décembre 2026 à 16h00 »,
+// « reportée du 24 novembre 2026 à 10 heures au 1er décembre 2026 à 10 heures », « LIRE le 23 novembre 2026 à 09:00 »,
+// « reportée au 4 décembre 2026 à 12h00, en lieu et place du 20 novembre 2026 », « fixée initialement au 27 novembre… est fixée au 1er décembre 2026 à 12 H 15 min ».
+const MOIS_FR={janvier:1,fevrier:2,mars:3,avril:4,mai:5,juin:6,juillet:7,aout:8,septembre:9,octobre:10,novembre:11,decembre:12};
+const RE_DATE_RECTIF=/(\d{1,2})(?:er)?\s*(?:[\/.\-]\s*(\d{1,2})\s*[\/.\-]\s*|\s+(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+)(\d{4}|\d{2}\b)(?:[\s,]*(?:a|,)?\s*(\d{1,2})\s*(?:h|:|heures?)\s*(\d{2})?)?/g;
+function datesDuTexte(t){
+  const r=[]; RE_DATE_RECTIF.lastIndex=0; let x;
+  while((x=RE_DATE_RECTIF.exec(t))){
+    const mo=x[2]?+x[2]:MOIS_FR[x[3]], an=x[4].length===2?2000+ +x[4]:+x[4], j=+x[1];
+    if(!mo||mo>12||j<1||j>31||an<2020||an>2100) continue;
+    r.push({i:x.index,fin:x.index+x[0].length,an,mo,j,h:x[5]!=null?+x[5]:null,mi:x[6]!=null?+x[6]:0});
+  }
+  return r;
+}
+function nouvelleDateDansTexte(texte,limiteActuelle){
+  const brut=sansAccent(texte||"").replace(/\s+/g," ");
+  const segments=brut.split(/ \| |rubrique ?:/).filter(x=>/limite|remise|reception|depot|plis|offres|dlro/.test(x));
+  for(const t of segments){
+    const ds=datesDuTexte(t); if(!ds.length) continue;
+    let choix=null;
+    const iLire=t.search(/\blire\b(?![\s\S]*\blire\b)/);
+    if(iLire>=0) choix=ds.find(d=>d.i>iLire);
+    if(!choix){
+      const gardees=ds.filter(d=>!/(au lieu d[eu]|initialement(?: fixee)?(?: au| le)?|en lieu et place d[eu]|report[a-z]* du|decal[a-z]* du|prevue? (?:au|le)|lieu du)\s*(?:[a-z]+di\s+)?(?:le\s+)?$/.test(t.slice(Math.max(0,d.i-45),d.i)));
+      choix=gardees[0]||null;
+    }
+    if(!choix) continue;
+    let h=choix.h, mi=choix.mi;
+    if(h==null){ // heure non précisée : on garde celle de la date limite actuelle
+      const p=limiteActuelle?isoVersParis(limiteActuelle):""; const hm=/T(\d{2}):(\d{2})/.exec(p||"");
+      h=hm?+hm[1]:12; mi=hm?+hm[2]:0;
+    }
+    if(h>23||mi>59) continue;
+    const p2=n=>String(n).padStart(2,"0");
+    return parisVersIso(choix.an+"-"+p2(choix.mo)+"-"+p2(choix.j)+"T"+p2(h)+":"+p2(mi));
+  }
+  return null;
+}
+function texteRectifBoamp(d){
+  if(!d) return {texte:"",date:null};
+  const f=d.FNSimple||d.MAPA||d.FNS||Object.values(d)[0]||{};
+  const r=f.rectificatif||premier(d,"rectificatif");
+  const info=r&&(r.infosRectif!=null?r.infosRectif:premier(r,"infosRectif"));
+  if(info){
+    let date=null;
+    const parties=(Array.isArray(info)?info:[info]).map(x=>{
+      if(typeof x==="string") return x;
+      if(x&&x.lireDate&&/reception|offre|candidature|pli/i.test(x.rubDelais||"ReceptionOffres")){ date=date||parisVersIso(String(x.lireDate).slice(0,16)); return "Date limite : au lieu du "+fmtDate(parisVersIso(String(x.auLieuDeDate||"").slice(0,16)),true)+", lire "+fmtDate(parisVersIso(String(x.lireDate).slice(0,16)),true); }
+      return Object.entries(x||{}).map(([k,v])=>(k==="rubrique"?"Rubrique : ":/^auLieuDe/i.test(k)?"Au lieu de : ":/^lire/i.test(k)?"Lire : ":/apres/i.test(k)?"Ajouter : ":/supprim/i.test(k)?"Supprimer : ":"")+txt(v)).join(" · ");
+    });
+    return {texte:parties.join(" | "),date};
+  }
+  const raison=premier(d,"efbc:ReasonDescription")||premier(d,"efbc:ChangeDescription");
+  return {texte:raison?txt(raison):"",date:null};
+}
+async function rectifsBoamp(ms){
+  const ids=ms.map(m=>m.idweb).filter(id=>/^\d{2}-\d{4,7}$/.test(id));
+  let n=0;
+  for(let i=0;i<ids.length;i+=20){
+    const lot=ids.slice(i,i+20);
+    const where="("+lot.map(id=>"annonce_lie="+q(id)).join(" or ")+") and nature!=\"ATTRIBUTION\"";
+    const url=API+"?"+new URLSearchParams({where,select:"idweb,nature,nature_libelle,annonce_lie,dateparution,datelimitereponse,url_avis,donnees",order_by:"dateparution asc",limit:"100"});
+    const rep=await fetch(url,{signal:AbortSignal.timeout(30000)}); if(!rep.ok) throw new Error("BOAMP indisponible ("+rep.status+")");
+    const j=await rep.json();
+    for(const r of j.results||[]){
+      for(const id of liste(r.annonce_lie).filter(x=>lot.includes(x))){
+        const m=ms.find(x=>x.idweb===id); if(!m) continue;
+        let d=null; try{ d=typeof r.donnees==="string"?JSON.parse(r.donnees):r.donnees; }catch(e){}
+        const tr=texteRectifBoamp(d), texte=tr.texte;
+        const annul=r.nature==="ANNULATION";
+        // date structurée du rectificatif, sinon la phrase, sinon la date limite de l'avis modifié (eForms)
+        const nl=annul?null:(tr.date||nouvelleDateDansTexte(texte,m.limite)||(r.nature!=="RECTIFICATIF"?r.datelimitereponse:null));
+        const cle="boamp:"+r.idweb;
+        if(changementsDe(m.idweb).some(x=>x.cle===cle)) continue;
+        const date=changerLimite(m,nl,"avis BOAMP n° "+r.idweb);
+        if(ajouterChangement(m,{cle,type:annul?"Annulation":r.nature==="RECTIFICATIF"?"Rectificatif BOAMP":"Avis modifié (BOAMP)",texte:[date,texte||(annul?"La consultation est annulée.":"L'avis a été modifié.")].filter(Boolean).join(" · ").slice(0,600),lien:r.url_avis||"https://www.boamp.fr/pages/avis/?q=idweb:"+r.idweb,date:r.dateparution?new Date(r.dateparution).toISOString():null})) n++;
+      }
+    }
+  }
+  return n;
+}
+async function pageConsultation(m){
+  const r=rectif.par[m.idweb]||{};
+  if(r.url) return r.url;
+  const atx=atxDe(m);
+  let url=null;
+  if(atx&&!atx.recherche) url=atx.consultation;
+  else if(atx&&atx.recherche){ // annonce qui ne donne que l'accueil de PLACE : le serveur retrouve la consultation (une seule fois)
+    if(r.introuvable===dateIso(new Date())) return null;
+    const l=await lienDirectDce(m,atx).catch(()=>null);
+    if(l&&l.consultation&&!/[?&]quoi=/.test(l.consultation)) url=l.consultation;
+    else if(l&&l.lien){ const a2=atexoLiens(l.lien); if(a2) url=a2.consultation; }
+    if(!url){ (rectif.par[m.idweb]=rectif.par[m.idweb]||{changements:[]}).introuvable=dateIso(new Date()); return null; }
+  }else{
+    const u=m.lienSaisi||m.urlDocs||"";
+    url=u&&!/boamp\.fr/i.test(u)&&!estAccueil(u)?u:null;
+  }
+  if(url) (rectif.par[m.idweb]=rectif.par[m.idweb]||{changements:[]}).url=url;
+  return url;
+}
+async function rectifsPages(ms){
+  let n=0, lues=0;
+  for(const m of ms){
+    const url=await pageConsultation(m); if(!url) continue;
+    if(++lues>12) break; // le serveur limite le nombre de lectures
+    let r; try{ r=await ficheParServeur(url); }catch(e){ continue; }
+    if(!r||!r.ok||!r.fiche) continue;
+    const f=r.fiche, ref=rectif.par[m.idweb]=rectif.par[m.idweb]||{changements:[]};
+    const docs=(f.docs||[]).join(" | ");
+    const textes=[];
+    if(ref.page){
+      if(f.limite&&ref.page.limite&&Math.abs(new Date(f.limite)-new Date(ref.page.limite))>=6e4){
+        textes.push(changerLimite(m,f.limite,"page de la consultation")||"Date limite modifiée sur la plateforme : "+fmtDate(f.limite,true));
+      }
+      if(docs&&ref.page.docs&&docs!==ref.page.docs) textes.push("Pièces de la consultation modifiées : « "+ref.page.docs+" » devient « "+docs+" ». Téléchargez à nouveau le DCE.");
+    }
+    ref.page={limite:f.limite||(ref.page&&ref.page.limite)||null,docs:docs||(ref.page&&ref.page.docs)||"",lu:new Date().toISOString()};
+    if(textes.length&&ajouterChangement(m,{cle:"page:"+dateIso(new Date())+":"+textes.join("|").length,type:/DCE|Pièces/.test(textes.join(" "))?"DCE modifié":"Date limite modifiée",texte:textes.join(" · "),lien:url})) n++;
+  }
+  return n;
+}
+// messages des plateformes (questions-réponses, rectificatifs…) rattachés aux marchés suivis
+function traiterMessagesSuivi(messages){
+  if(!messages||!messages.length) return 0;
+  const ms=marchesSuivisOuverts(); let n=0;
+  const cles=m=>{ const k=new Set(); for(const u of [m.lienSaisi,m.urlDocs,m.urlDepot,...(m.urls||[]),(atxDe(m)||{}).consultation]){ try{ const c=u&&pfDeLien(new URL(u)); if(c) k.add(c.cle); }catch(e){} } const a=atxDe(m); if(a){ const x=/consultation\/(\d+)/.exec(a.consultation||""); if(x) k.add("id:"+x[1]); } return k; };
+  for(const msg of messages){
+    const t=sansAccent((msg.sujet||"")+" "+(msg.texte||""));
+    const kMsg=new Set(); for(const l of msg.liens||[]){ try{ const u=deballerLien(l); const c=u&&pfDeLien(u); if(c) kMsg.add(c.cle); const x=/consultation\/(\d+)|[?&](?:id|refConsultation)=(\d{5,})/.exec(u?u.href:l); if(x) kMsg.add("id:"+(x[1]||x[2])); }catch(e){} }
+    for(const m of ms){
+      const ref=(m.refAcheteur||"").trim();
+      const parLien=[...cles(m)].some(k=>kMsg.has(k));
+      const parRef=ref.length>=5&&t.includes(sansAccent(ref));
+      const mots=sansAccent(m.objet||"").split(/[^a-z0-9]+/).filter(w=>w.length>=5);
+      const parObjet=mots.length>=3&&mots.filter(w=>t.includes(w)).length>=Math.max(3,Math.ceil(mots.length*.8));
+      if(!parLien&&!parRef&&!parObjet) continue;
+      const type=/question|r[ée]ponse/i.test(msg.sujet)?"Question-réponse":/annul/i.test(msg.sujet)?"Annulation":/rectifi|modifi|report|prolong|mise [àa] jour|version|dce|document/i.test(msg.sujet)?"Rectificatif":"Message de la plateforme";
+      const nl=nouvelleDateDansTexte(msg.texte,m.limite);
+      const date=changerLimite(m,nl,"mail du "+(msg.date?new Date(msg.date).toLocaleDateString("fr-FR"):"jour"));
+      if(ajouterChangement(m,{cle:"mail:"+(msg.id||msg.sujet+msg.date),type,texte:[date,"« "+msg.sujet+" »",(msg.texte||"").slice(0,280)].filter(Boolean).join(" · "),lien:(msg.liens||[]).find(l=>/consultation|refConsultation|id=/i.test(l))||lienMarche(m),date:msg.date||null})) n++;
+    }
+  }
+  if(n){ sauverRectif(); afficherModifs(); notifierModifs(); rafraichirApresModifs(); }
+  return n;
+}
+function rafraichirApresModifs(){
+  document.querySelectorAll(".carte[data-id]").forEach(c=>{ const id=c.dataset.id; const m=manuels[id]||(statuts[id]&&statuts[id].m); if(m&&rectif.par[id]) c.replaceWith(carte(m)); });
+  afficherRappels();
+}
+function notifierModifs(){
+  const nonNotifies=[];
+  for(const [id,r] of Object.entries(rectif.par)) for(const c of r.changements||[]) if(!c.lu&&!c.notifie){ c.notifie=true; nonNotifies.push(c); }
+  if(!nonNotifies.length) return;
+  sauverRectif();
+  notifier("Vigie · "+(nonNotifies.length>1?nonNotifies.length+" modifications":nonNotifies[0].type)+" sur vos marchés",nonNotifies.slice(0,3).map(c=>c.objet+" : "+c.type).join("\n"),"vigie-modifs");
+}
+function afficherModifs(){
+  const zone=$("#annModifs"); if(!zone) return;
+  const tous=[]; for(const [id,r] of Object.entries(rectif.par)) for(const c of r.changements||[]) if(!c.lu) tous.push({id,c});
+  zone.innerHTML=""; zone.className="annonce";
+  if(!tous.length){ zone.hidden=true; return; }
+  zone.hidden=false;
+  tous.sort((a,b)=>(b.c.date||"").localeCompare(a.c.date||""));
+  const toutVu=el("button",{class:"mini",type:"button",text:"Tout marquer comme vu"});
+  toutVu.onclick=()=>{ tous.forEach(x=>x.c.lu=true); sauverRectif(); afficherModifs(); rafraichirApresModifs(); };
+  zone.append(el("h2",{},"⚠ Modifications sur vos marchés suivis ("+tous.length+")",toutVu),
+    el("ul",{},tous.map(({id,c})=>{
+      const m=manuels[id]||(statuts[id]&&statuts[id].m)||{idweb:id,objet:c.objet};
+      const vu=el("button",{class:"mini",type:"button",text:"Vu"}); vu.onclick=()=>{ c.lu=true; sauverRectif(); afficherModifs(); rafraichirApresModifs(); };
+      return el("li",{},
+        el("span",{class:"quoi",text:c.type}),
+        el("button",{class:"lien",type:"button",onclick:()=>montrerCarte(m),text:m.objet||c.objet}),
+        el("span",{class:"s",text:c.date?new Date(c.date).toLocaleDateString("fr-FR"):""}),
+        c.lien?el("a",{href:c.lien,target:"_blank",rel:"noopener",class:"s",text:"voir"}):null,
+        /Date limite/.test(c.texte)&&m.limite?menuAgenda(m,true):null, vu,
+        el("p",{class:"detail",text:c.texte}));
+    })));
+}
+async function verifierModifications(force){
+  const auj=dateIso(new Date());
+  if(!force&&rectif.dernier===auj) return;
+  const ms=marchesSuivisOuverts(); if(!ms.length) return;
+  rectif.dernier=auj; sauverRectif();
+  let n=0;
+  try{ n+=await rectifsBoamp(ms); }catch(e){ console.warn("Rectificatifs BOAMP :",e.message); }
+  try{ n+=await rectifsPages(ms); }catch(e){ console.warn("Pages des consultations :",e.message); }
+  sauverRectif();
+  if(n){ afficherModifs(); notifierModifs(); rafraichirApresModifs(); if(!$("#vue-suivi").hidden) afficherSuivi(); }
+}
+function initModifs(){
+  afficherModifs();
+  setTimeout(()=>verifierModifications(false),4000);
+  setInterval(()=>verifierModifications(false),60*6e4);
+  const b=$("#btnModifs"); if(b) b.onclick=async()=>{ b.disabled=true; const t=b.textContent; b.textContent="⏳ Vérification…"; try{ await verifierModifications(true); toast("Vérification terminée"); }finally{ b.disabled=false; b.textContent=t; } };
+}
+
 /* ---------- Démarrage ---------- */
 let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
@@ -2688,12 +3247,12 @@ function init(){
   $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; etat.regions.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); msRegions.rafraichir(); rechercher(0); };
   document.querySelectorAll(".onglet").forEach(b=>b.onclick=()=>changerVue(b.dataset.vue));
   $("#btnExport").onclick=()=>{
-    const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts,manuels},null,2)],{type:"application/json"});
+    const blob=new Blob([JSON.stringify({version:1,exporte:new Date().toISOString(),statuts,manuels,rectif},null,2)],{type:"application/json"});
     const a=el("a",{href:URL.createObjectURL(blob),download:"vigie-marches-statuts-"+dateIso(new Date())+".json"}); document.body.append(a); a.click(); a.remove();
   };
   $("#fichierImport").onchange=async e=>{
     const f=e.target.files[0]; if(!f) return;
-    try{ const j=JSON.parse(await f.text()); const s=j.statuts||j; if(typeof s!=="object") throw 0; statuts={...statuts,...s}; ecrire(CLE_STATUTS,statuts); if(j.manuels&&typeof j.manuels==="object"){ manuels={...manuels,...j.manuels}; sauverManuels(); afficherManuels(); } majCompteSuivis(); afficherSuivi(); toast(Object.keys(s).length+" marchés restaurés"); }
+    try{ const j=JSON.parse(await f.text()); const s=j.statuts||j; if(typeof s!=="object") throw 0; statuts={...statuts,...s}; ecrire(CLE_STATUTS,statuts); if(j.manuels&&typeof j.manuels==="object"){ manuels={...manuels,...j.manuels}; sauverManuels(); afficherManuels(); } if(j.rectif&&j.rectif.par){ rectif.par={...j.rectif.par,...rectif.par}; sauverRectif(); afficherModifs(); } majCompteSuivis(); afficherSuivi(); toast(Object.keys(s).length+" marchés restaurés"); }
     catch(err){ toast("Fichier de sauvegarde illisible"); }
     e.target.value="";
   };
@@ -2705,7 +3264,7 @@ function init(){
   majBlocTableau();
   // à l'ouverture : relecture du tableau Excel (décisions « Je ne réponds pas »), sans rien demander
   setTimeout(()=>{ (msConfigure()?msInit().catch(()=>{}):Promise.resolve()).then(()=>synchroTableau(false)); },1500);
-  afficherSources(); majCompteSuivis(); initDecp();
+  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto(); initModifs();
   rechercher(0);
 }
 /* ====================================================================
