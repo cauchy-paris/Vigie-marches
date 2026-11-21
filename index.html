@@ -222,6 +222,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .panneau input[type=checkbox]{width:auto;padding:0;accent-color:var(--bleu)}
 .zone-colle{border:2px dashed var(--bleu-moyen);border-radius:10px;padding:14px;text-align:center;color:var(--gris);font-size:13px;background:var(--fond);cursor:text;min-height:64px;display:grid;place-items:center}
 .zone-colle:focus,.zone-colle.survol{border-color:var(--rouge);background:var(--rouge-clair);outline:none}
+.tout-cocher{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--bleu-fonce);padding:2px 10px;cursor:pointer}
 .trouves{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .trouves li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;align-items:start;border:1px solid var(--trait);border-left:4px solid var(--bleu);border-radius:8px;padding:8px 10px;font-size:13px}
 .trouves li.deja{opacity:.6;border-left-color:var(--gris)}
@@ -937,7 +938,7 @@ function carte(m){
 
   // Badges
   const badges=el("div",{class:"badges"});
-  if(m.manuel) badges.append(el("span",{class:"badge manuel",title:"Ajouté à la main à partir du lien de la consultation",text:"Ajouté par lien"}));
+  if(m.manuel) badges.append(m.viaMail?el("span",{class:"badge manuel",title:"Ajouté depuis l'alerte « "+(m.viaMail.sujet||"")+" »",text:"Alerte mail"}):el("span",{class:"badge manuel",title:"Ajouté à la main à partir du lien de la consultation",text:"Ajouté par lien"}));
   if(visitePrecedente&&m.parution&&new Date(m.parution)>new Date(visitePrecedente)) badges.append(el("span",{class:"badge nouveau",text:"Nouveau"}));
   m.types.forEach(t=>badges.append(el("span",{class:"badge "+t.toLowerCase(),text:t.charAt(0)+t.slice(1).toLowerCase()})));
   if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
@@ -1028,7 +1029,7 @@ function carte(m){
     ? (plat? (plat.nom+" · "+(plat.compte||"accès selon la plateforme")) : "Lien de consultation indiqué par l'acheteur")
     : m.manuel ? "Marché ajouté sans lien de consultation."
     : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";
-  c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:(m.manuel&&/^MAN-/.test(m.idweb)?"Ajouté par lien":(m.manuel?"Ajouté par lien · ":"")+"Avis n° "+m.idweb)+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
+  c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:(m.manuel&&/^MAN-/.test(m.idweb)?(m.viaMail?"Alerte mail":"Ajouté par lien"):(m.manuel?(m.viaMail?"Alerte mail · ":"Ajouté par lien · "):"")+"Avis n° "+m.idweb)+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
   return c;
 }
 
@@ -1852,8 +1853,7 @@ function afficherManuels(){
   c.innerHTML="";
   const n=Object.keys(manuels).length; if(!n) return;
   const items=manuelsFiltres();
-  c.append(el("div",{class:"manuels-tete"},"Marchés ajoutés par lien ("+items.length+")",
-    items.length<n?el("small",{text:(n-items.length)+" autre"+(n-items.length>1?"s":"")+" masqué"+(n-items.length>1?"s":"")+" par les filtres (type, département, mots-clés, date limite dépassée…)"}):null));
+  if(items.length<n) c.append(el("div",{class:"manuels-tete"},el("small",{text:(n-items.length)+" marché"+(n-items.length>1?"s":"")+" ajouté"+(n-items.length>1?"s":"")+" (lien ou alerte mail) masqué"+(n-items.length>1?"s":"")+" par les filtres (type, département, mots-clés, date limite dépassée…)"})));
   items.forEach(m=>c.append(carte(m)));
 }
 function rafraichirCartes(m){
@@ -2470,6 +2470,7 @@ async function ajouterDepuisAlerte(c){
       description:(f.description||"").slice(0,1500),
     });
   }
+  if(m.limite&&new Date(m.limite)<new Date()) return {expire:true,texte:"Date limite passée ("+new Date(m.limite).toLocaleDateString("fr-FR")+") : non ajouté"};
   const manque=[!m.objet&&"l'intitulé",!m.acheteur&&"l'acheteur",!m.limite&&"la date limite"].filter(Boolean);
   if(!m.objet) m.objet="Consultation "+c.pf+(c.reference?" "+c.reference:"")+" (à compléter)";
   if(!m.acheteur) m.acheteur="Acheteur à compléter";
@@ -2522,7 +2523,8 @@ function ouvrirImportMail(){
   const fichiers=el("input",{type:"file",accept:".eml,message/rfc822",multiple:true,hidden:true});
   const bFichiers=el("button",{class:"btn",type:"button",onclick:()=>fichiers.click()},"Choisir des fichiers .eml");
   const liste=el("ul",{class:"trouves"});
-  const bTout=el("button",{class:"btn",type:"button",hidden:true},"Tout cocher / décocher");
+  const cbTout=el("input",{type:"checkbox"});
+  const bTout=el("label",{class:"tout-cocher",hidden:true},cbTout,"Tout sélectionner");
   const bAjout=el("button",{class:"btn btn-plein",type:"button",hidden:true},"Ajouter les marchés cochés");
   const dire=(t,cls)=>{ etat.className="pn-etat "+(cls||""); etat.textContent=t; };
 
@@ -2543,15 +2545,20 @@ function ouvrirImportMail(){
     bTout.hidden=bAjout.hidden=!trouves.some(c=>!dejaDansVigie(c));
     compter();
   }
-  function compter(){ const n=trouves.filter(c=>c.coche&&!c.cb.disabled).length; bAjout.textContent=n?"Ajouter "+n+" marché"+(n>1?"s":""):"Ajouter les marchés cochés"; bAjout.disabled=!n; }
+  function compter(){
+    const libres=trouves.filter(c=>c.cb&&!c.cb.disabled), nc=libres.filter(c=>c.coche).length;
+    cbTout.checked=!!libres.length&&nc===libres.length; cbTout.indeterminate=nc>0&&nc<libres.length;
+    const n=trouves.filter(c=>c.coche&&!c.cb.disabled).length; bAjout.textContent=n?"Ajouter "+n+" marché"+(n>1?"s":""):"Ajouter les marchés cochés"; bAjout.disabled=!n; }
   function ingerer(mails,info){
     const avant=trouves.length, cles=new Set(trouves.map(c=>c.cle));
-    for(const m of mails) for(const c of consultationsDuMail(m)) if(!cles.has(c.cle)){ cles.add(c.cle); trouves.push(c); }
+    const maintenant=new Date(); let passees=0;
+    for(const m of mails) for(const c of consultationsDuMail(m)) if(!cles.has(c.cle)){ cles.add(c.cle); if(c.limite&&new Date(c.limite)<maintenant){ passees++; continue; } trouves.push(c); }
+    if(passees) info=(info?info+", ":"")+passees+" écartée"+(passees>1?"s":"")+" car la date limite est passée";
     trouves.sort((a,b)=>(b.mail&&b.mail.date||"").localeCompare(a.mail&&a.mail.date||""));
     afficher();
     const n=trouves.length-avant, nd=trouves.filter(c=>!dejaDansVigie(c)).length;
     if(n&&!nd){ dire("Les "+n+" consultations trouvées"+(info?" ("+info+")":"")+" sont déjà dans Vigie.","ok"); return; }
-    dire(n?"✓ "+n+" consultation"+(n>1?"s":"")+" trouvée"+(n>1?"s":"")+(info?" ("+info+")":"")+(nd<trouves.length?", dont "+(trouves.length-nd)+" déjà dans Vigie":"")+". Décochez celles qui ne vous intéressent pas, puis ajoutez."
+    dire(n?"✓ "+n+" consultation"+(n>1?"s":"")+" trouvée"+(n>1?"s":"")+(info?" ("+info+")":"")+(nd<trouves.length?", dont "+(trouves.length-nd)+" déjà dans Vigie":"")+". Décochez celles qui ne vous intéressent pas, puis ajoutez : elles s'afficheront dans la recherche."
       :"Aucune nouvelle consultation trouvée"+(info?" ("+info+")":"")+". Si une alerte n'est pas reconnue, collez-la ci-dessous ou ajoutez le marché par son lien.",n?"ok":"ko");
   }
   bOutlook.onclick=async()=>{
@@ -2585,14 +2592,14 @@ function ouvrirImportMail(){
     if(msg&&!mails.length){ dire("Les fichiers .msg d'Outlook ne sont pas lisibles : utilisez « Chercher dans Outlook » ou copiez-collez le mail.","ko"); return; }
     ingerer(mails,mails.length+" fichier"+(mails.length>1?"s":""));
   }
-  bTout.onclick=()=>{ const libres=trouves.filter(c=>!c.cb.disabled); const v=!libres.every(c=>c.coche); libres.forEach(c=>{ c.coche=v; c.cb.checked=v; }); compter(); };
+  cbTout.onchange=()=>{ const v=cbTout.checked; trouves.filter(c=>!c.cb.disabled).forEach(c=>{ c.coche=v; c.cb.checked=v; }); compter(); };
   bAjout.onclick=async()=>{
     if(occupe) return; occupe=true; bAjout.disabled=bOutlook.disabled=true;
     const choix=trouves.filter(c=>c.coche&&!c.cb.disabled);
     trouves.filter(c=>!c.coche&&!c.cb.disabled).forEach(c=>memo.ignores[c.cle]=1);
     const cles=Object.keys(memo.ignores); if(cles.length>2000) cles.slice(0,cles.length-2000).forEach(k=>delete memo.ignores[k]);
     ecrire(CLE_MAIL,memo);
-    let ok=0, acompleter=0;
+    let ok=0, acompleter=0, expirees=0, echecs=0;
     for(const [i,c] of choix.entries()){
       dire("⏳ Ajout "+(i+1)+" / "+choix.length+" : lecture de la consultation (jusqu'à une minute si le serveur Vigie était en veille)…");
       c.li.className="encours"; c.cb.disabled=true;
@@ -2601,16 +2608,21 @@ function ouvrirImportMail(){
         if(dejaDansVigie(c)){ c.li.className="deja"; res.textContent="Déjà dans Vigie"; continue; }
         const r=await ajouterDepuisAlerte(c);
         if(r.deja){ c.li.className="deja"; res.textContent=r.texte; continue; }
+        if(r.expire){ expirees++; c.li.className="deja"; res.textContent=r.texte; continue; }
         ok++;
         if(r.manque.length){ acompleter++; c.li.className="ko"; res.className="res ko"; res.textContent="Ajouté (d'après "+r.source+") — à compléter : "+r.manque.join(", ")+" (bouton Modifier sur l'encart)"; }
         else{ c.li.className="ok"; res.className="res ok"; res.textContent="✓ Ajouté d'après "+r.source+" : « "+r.m.objet.slice(0,90)+" »"; }
         c.li.querySelector(".t").textContent=r.m.objet;
-      }catch(e){ c.li.className="ko"; res.className="res ko"; res.textContent="Échec : "+e.message; }
+      }catch(e){ echecs++; c.li.className="ko"; res.className="res ko"; res.textContent="Échec : "+e.message; }
     }
     afficherManuels();
     if(!$("#vue-suivi").hidden) afficherSuivi();
-    dire(ok?"✓ "+ok+" marché"+(ok>1?"s":"")+" ajouté"+(ok>1?"s":"")+" en tête de la recherche"+(acompleter?", dont "+acompleter+" à compléter":"")+".":"Aucun marché ajouté.",ok?"ok":"ko");
+    const bilan=(ok?ok+" marché"+(ok>1?"s":"")+" ajouté"+(ok>1?"s":"")+" à la recherche"+(acompleter?" (dont "+acompleter+" à compléter)":""):"Aucun marché ajouté")+(expirees?" · "+expirees+" écarté"+(expirees>1?"s":"")+" (date limite passée)":"");
     occupe=false; bOutlook.disabled=false; compter();
+    if(echecs){ dire(bilan+" · "+echecs+" échec"+(echecs>1?"s":"")+" (voir la liste).","ko"); return; }
+    // tout s'est bien passé : on ferme et on montre les marchés dans la page principale
+    fermer(); toast(bilan);
+    if(ok){ changerVue("recherche"); const lm=$("#listeManuels"); if(lm&&lm.firstChild) lm.scrollIntoView({behavior:"smooth",block:"start"}); }
   };
   const boite=el("div",{class:"captcha panneau",role:"dialog","aria-modal":"true","aria-label":"Importer les alertes mail"},
     el("h3",{text:"Importer les alertes mail des plateformes"}),
@@ -2630,8 +2642,8 @@ function ouvrirImportMail(){
     el("div",{class:"bloc"},
       el("h4",{text:"Ou : copier-coller d'un mail d'alerte"}),
       zone, el("div",{class:"ligne"},bFichiers,fichiers)),
-    etat, liste,
-    el("div",{class:"actions"},bTout,el("button",{class:"btn",type:"button",onclick:()=>{ if(!occupe) fermer(); }},"Fermer"),bAjout));
+    etat, bTout, liste,
+    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:()=>{ if(!occupe) fermer(); }},"Fermer"),bAjout));
   const fond=el("div",{class:"captcha-fond"},boite);
   fond.addEventListener("click",e=>{ if(e.target===fond&&!occupe) fermer(); });
   document.addEventListener("keydown",echap);
