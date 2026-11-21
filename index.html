@@ -211,6 +211,10 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .annonce .s{color:var(--gris);font-size:12.5px}
 .annonce .actions{display:flex;gap:8px;flex-wrap:wrap}
 .carte.eclaire{outline:3px solid var(--rouge);outline-offset:2px}
+.annonce .groupe{font:700 12px/1.3 var(--f-texte);text-transform:uppercase;letter-spacing:.05em;color:var(--rouge);margin-top:4px}
+.annonce .mini{border:1px solid var(--trait);background:var(--blanc);border-radius:6px;padding:1px 8px;font-size:12px;cursor:pointer;color:var(--gris)}
+.annonce .mini:hover{border-color:var(--rouge);color:var(--rouge)}
+.annonce.attente{border-left-color:var(--bleu-moyen)}
 /* menu Agenda d'un encart */
 .menu-agenda{position:relative}
 .menu-agenda>summary{list-style:none}
@@ -321,7 +325,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 </header>
 
 <!-- Rappels J-7 / J-2, résumé du matin, modifications des consultations suivies -->
-<div class="annonces" id="annonces" aria-live="polite"><div id="annRappels" hidden></div></div>
+<div class="annonces" id="annonces" aria-live="polite"><div id="annRappels" hidden></div><div id="annMatin" hidden></div></div>
 
 <!-- ============ VUE RECHERCHE ============ -->
 <main class="page" id="vue-recherche">
@@ -2416,9 +2420,10 @@ function lireEml(brut){
 }
 
 /* --- Outlook / Microsoft 365 via Graph --- */
-async function alertesOutlook(depuisIso,etat){
-  if(!msCompte()&&!await msConnecter([...MS_SCOPES,...MAIL_SCOPES])) return null;
-  const jeton=await msJeton(true,MAIL_SCOPES); if(!jeton) return null;
+async function alertesOutlook(depuisIso,etat,silencieux){
+  if(silencieux){ await msInit().catch(()=>null); if(!msCompte()) return null; }
+  else if(!msCompte()&&!await msConnecter([...MS_SCOPES,...MAIL_SCOPES])) return null;
+  const jeton=await msJeton(!silencieux,MAIL_SCOPES); if(!jeton) return null;
   const H={Authorization:"Bearer "+jeton};
   const G="https://graph.microsoft.com/v1.0/me/messages";
   let url=G+"?"+new URLSearchParams({"$filter":"receivedDateTime ge "+depuisIso,"$orderby":"receivedDateTime desc","$select":"id,subject,from,receivedDateTime","$top":"100"});
@@ -2529,6 +2534,9 @@ function ouvrirImportMail(){
   const iHote=el("input",{type:"text",placeholder:"serveur IMAP (ex. imap.mondomaine.fr)"});
   const iMdp=el("input",{type:"password",placeholder:"mot de passe d'application",autocomplete:"current-password"});
   const iSouv=el("input",{type:"checkbox"});
+  const cbAuto=el("input",{type:"checkbox"}); cbAuto.checked=!memo.auto||memo.auto.actif!==false;
+  const noteAuto=()=>memo.auto&&memo.auto.actif?"Import automatique actif ("+(memo.auto.source==="outlook"?"Outlook":memo.auto.utilisateur||"IMAP")+")":"";
+  const reglerAuto=(source,cfg)=>{ memo.auto=cbAuto.checked?{actif:true,source,utilisateur:cfg&&cfg.utilisateur||""}:{actif:false}; };
   const bImap=el("button",{class:"btn btn-plein",type:"button"},"Chercher dans cette boîte");
   iType.value=imap.type||"gmail"; iAdr.value=imap.utilisateur||""; iHote.value=imap.hote||""; iMdp.value=imap.motdepasse||""; iSouv.checked=!!imap.souvenir;
   const majType=()=>{ const d=MESSAGERIES.find(x=>x[0]===iType.value); if(d&&d[2]) iHote.value=d[2]; iHote.hidden=iType.value!=="autre"&&iType.value!=="ovh"&&iType.value!=="ionos"; iMdp.placeholder=iType.value==="gmail"||iType.value==="yahoo"||iType.value==="icloud"?"mot de passe d'application (16 caractères)":"mot de passe de la boîte mail"; };
@@ -2539,6 +2547,7 @@ function ouvrirImportMail(){
     if(occupe) return;
     const cfg={type:iType.value,hote:iHote.value.trim(),utilisateur:iAdr.value.trim(),motdepasse:iMdp.value,souvenir:iSouv.checked};
     if(!cfg.utilisateur||!cfg.motdepasse||!cfg.hote){ dire("Indiquez l'adresse, le mot de passe"+(iHote.hidden?"":" et le serveur IMAP")+".","ko"); return; }
+    if(cbAuto.checked&&!cfg.souvenir){ dire("Pour l'import automatique de chaque matin, cochez aussi « Se souvenir du mot de passe sur cet appareil » (ou décochez l'import automatique).","ko"); return; }
     ecrire(CLE_IMAP,{...cfg,motdepasse:cfg.souvenir?cfg.motdepasse:""});
     occupe=true; bImap.disabled=true;
     const jours=periode.value==="dernier"?null:+periode.value;
@@ -2546,7 +2555,7 @@ function ouvrirImportMail(){
     try{
       dire("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
       const r=await alertesImap(cfg,depuis.toISOString());
-      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      memo.dernier=new Date().toISOString(); reglerAuto("imap",cfg); ecrire(CLE_MAIL,memo);
       ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
     }catch(e){ dire(e.name==="TimeoutError"?"La messagerie met trop de temps à répondre : réessayez avec une période plus courte.":e.message,"ko"); }
     finally{ occupe=false; bImap.disabled=false; }
@@ -2610,7 +2619,7 @@ function ouvrirImportMail(){
       dire("⏳ Connexion à Outlook…");
       const r=await alertesOutlook(depuis.toISOString(),t=>dire(t));
       if(!r){ dire("Connexion à Outlook annulée.","ko"); return; }
-      memo.dernier=new Date().toISOString(); ecrire(CLE_MAIL,memo);
+      memo.dernier=new Date().toISOString(); reglerAuto("outlook"); ecrire(CLE_MAIL,memo);
       ingerer(r.mails,r.lus+" mails parcourus, "+r.mails.length+" alertes"+(r.echanges?", "+r.echanges+" échanges sur vos candidatures ignorés":""));
     }catch(e){ dire(e.message+(/Mail\.Read|consent|AADSTS65001|Access is denied|403/i.test(e.message)?" — l'autorisation de lire les mails n'a pas été accordée.":""),"ko"); }
     finally{ occupe=false; bOutlook.disabled=false; }
@@ -2676,6 +2685,7 @@ function ouvrirImportMail(){
     el("h3",{text:"Importer les alertes mail des plateformes"}),
     el("p",{class:"note",text:"Vigie repère dans les alertes de BOAMP, PLACE, Maximilien, AWS-Achat, achatpublic, e-marchespublics… les liens des consultations, puis les ajoute comme « Ajouter un marché par son lien ». Avec Outlook, vos mails sont lus par votre navigateur ; avec Gmail et les autres messageries, le serveur Vigie les lit le temps de l'import, sans rien garder."}),
     el("div",{class:"ligne"},el("span",{class:"note",text:"Période :"}),periode,el("a",{href:"aide/connexions.html#mail",target:"_blank",rel:"noopener",class:"btn"},"Procédure pas à pas")),
+    el("label",{class:"note",style:"display:flex;gap:6px;align-items:flex-start"},cbAuto,el("span",{},el("strong",{text:"Importer automatiquement chaque matin"})," : à la première ouverture de Vigie de la journée, la boîte est relue et les nouveaux marchés sont ajoutés, avec un résumé en haut de la page. "+noteAuto())),
     msConfigure()?el("div",{class:"bloc"},
       el("h4",{text:"Outlook, Hotmail, Microsoft 365"}),
       el("div",{class:"ligne"},bOutlook),
@@ -2850,6 +2860,111 @@ function initRappels(){
   setInterval(verifierRappels,36e5); // un onglet resté ouvert prévient aussi dans la journée
 }
 
+
+/* ====================================================================
+   Import automatique du matin
+   À la première ouverture de Vigie de la journée (ou au changement de jour si l'onglet est resté ouvert),
+   la boîte choisie dans « Importer les alertes mail » est relue sans rien demander :
+   - Outlook : jeton Microsoft déjà accordé (lecture seule) ;
+   - Gmail et autres : mot de passe d'application mémorisé sur cet appareil.
+   Les nouvelles consultations sont ajoutées, puis résumées en haut de la page :
+   d'abord celles qui correspondent à votre profil ou à vos filtres, ensuite les autres.
+   ==================================================================== */
+const HEURE_MATIN=6;
+let importAutoEnCours=false;
+function estPertinent(m){
+  try{ if(typeof notePertinence==="function"){ const n=notePertinence(m)||{}; return !n.exclu&&(n.score||0)>=60; } }catch(e){}
+  return manuelsFiltres().some(x=>x.idweb===m.idweb);
+}
+function nouvellesConsultations(mails,memo){
+  const vues=new Set(), maintenant=new Date(), r=[];
+  for(const mail of mails) for(const c of consultationsDuMail(mail)){
+    if(vues.has(c.cle)) continue; vues.add(c.cle);
+    if(c.limite&&new Date(c.limite)<maintenant) continue;
+    if(dejaDansVigie(c)||memo.ignores[c.cle]) continue;
+    r.push(c);
+  }
+  return r;
+}
+function afficherMatin(texteAttente){
+  const zone=$("#annMatin"); if(!zone) return;
+  zone.innerHTML=""; zone.className="annonce"+(texteAttente?" attente":"");
+  if(texteAttente){ zone.hidden=false; zone.append(el("h2",{text:"✉ Import du matin"}),el("p",{class:"note-docs",text:texteAttente})); return; }
+  const memo=lire(CLE_MAIL,{}); const r=memo.resume;
+  if(!r||r.date!==dateIso(new Date())||r.ferme){ zone.hidden=true; return; }
+  const ms=(r.ids||[]).map(id=>manuels[id]).filter(Boolean);
+  const fermer=el("button",{class:"fermer",type:"button",title:"Masquer le résumé","aria-label":"Masquer le résumé",text:"×"});
+  fermer.onclick=()=>{ const x=lire(CLE_MAIL,{}); if(x.resume) x.resume.ferme=true; ecrire(CLE_MAIL,x); zone.hidden=true; };
+  zone.hidden=false;
+  const h=new Date(r.heure||Date.now()).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
+  if(r.erreur){
+    zone.append(el("h2",{},"✉ Import du matin impossible",fermer),el("p",{class:"note-docs",text:r.erreur}),
+      el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:()=>ouvrirImportMail()},"Ouvrir l'import des alertes")));
+    return;
+  }
+  if(!ms.length){ zone.append(el("h2",{},"✉ Import du matin ("+h+") : aucun nouveau marché"+(r.lus?" dans "+r.lus+" mails":""),fermer)); return; }
+  const pert=ms.filter(estPertinent), autres=ms.filter(m=>!pert.includes(m));
+  const ligne=m=>{
+    const j=joursRestants(m.limite);
+    const retirer=el("button",{class:"mini",type:"button",title:"Retirer ce marché de Vigie (il ne sera plus proposé)",text:"Retirer"});
+    retirer.onclick=()=>{ delete manuels[m.idweb]; sauverManuels(); const x=lire(CLE_MAIL,{ignores:{}}); x.ignores=x.ignores||{}; if(m.cleMail) x.ignores[m.cleMail]=1; ecrire(CLE_MAIL,x); afficherManuels(); afficherMatin(); };
+    return el("li",{},
+      el("span",{class:"jj"+(j!=null&&j<=7?" vite":""),text:j==null?"date ?":j<0?"clos":libJ(j)}),
+      el("button",{class:"lien",type:"button",onclick:()=>montrerCarte(m),text:m.objet}),
+      el("span",{class:"s",text:[m.acheteur,m.deps&&m.deps.join(", ")].filter(Boolean).join(" · ")}),retirer);
+  };
+  zone.append(el("h2",{},"✉ Import du matin ("+h+") : "+ms.length+" nouveau"+(ms.length>1?"x":"")+" marché"+(ms.length>1?"s":"")+(pert.length?", dont "+pert.length+" pertinent"+(pert.length>1?"s":""):""),fermer));
+  if(pert.length) zone.append(el("div",{class:"groupe",text:"Correspondent à vos "+(typeof notePertinence==="function"?"critères":"filtres de recherche")}),el("ul",{},pert.map(ligne)));
+  if(autres.length){
+    const d=el("details",{},el("summary",{class:"groupe",style:"cursor:pointer",text:"Autres marchés importés ("+autres.length+")"}),el("ul",{},autres.map(ligne)));
+    if(!pert.length) d.open=true;
+    zone.append(d);
+  }
+}
+async function importAutomatique(force){
+  if(importAutoEnCours) return;
+  const memo=lire(CLE_MAIL,{dernier:null,ignores:{}}); memo.ignores=memo.ignores||{};
+  const auto=memo.auto;
+  if(!auto||!auto.actif) return;
+  const auj=dateIso(new Date());
+  if(!force&&(memo.essaiAuto===auj||(memo.resume&&memo.resume.date===auj))) return;
+  if(!force&&new Date().getHours()<HEURE_MATIN) return;
+  importAutoEnCours=true;
+  memo.essaiAuto=auj; ecrire(CLE_MAIL,memo);
+  const depuis=new Date(Math.max(Date.now()-14*864e5,memo.dernier?new Date(memo.dernier).getTime()-864e5:Date.now()-3*864e5));
+  const fin=(resume)=>{ const x=lire(CLE_MAIL,memo); x.resume={date:auj,heure:new Date().toISOString(),...resume}; ecrire(CLE_MAIL,x); importAutoEnCours=false; afficherMatin(); };
+  try{
+    let r=null;
+    afficherMatin("⏳ Lecture des alertes reçues depuis le "+depuis.toLocaleDateString("fr-FR")+"…");
+    if(auto.source==="outlook"){
+      if(!msConfigure()) return fin({erreur:"La connexion Outlook n'est pas disponible sur ce site."});
+      r=await alertesOutlook(depuis.toISOString(),t=>afficherMatin(t),true);
+      if(!r) return fin({erreur:"Microsoft demande de vous reconnecter : ouvrez « Importer les alertes mail » et cliquez « Se connecter et chercher dans Outlook »."});
+    }else{
+      const cfg=lire(CLE_IMAP,{});
+      if(!cfg.motdepasse) return fin({erreur:"Le mot de passe de la boîte "+(cfg.utilisateur||"")+" n'est pas mémorisé sur cet appareil : ouvrez « Importer les alertes mail », cochez « Se souvenir du mot de passe » et lancez un import."});
+      afficherMatin("⏳ Lecture de la boîte "+cfg.utilisateur+" (jusqu'à deux minutes si le serveur Vigie était en veille)…");
+      r=await alertesImap(cfg,depuis.toISOString());
+    }
+    const x=lire(CLE_MAIL,memo); x.dernier=new Date().toISOString(); ecrire(CLE_MAIL,x);
+    const cs=nouvellesConsultations(r.mails,x);
+    const ids=[];
+    for(const [i,c] of cs.entries()){
+      afficherMatin("⏳ Ajout des nouveaux marchés : "+(i+1)+" / "+cs.length+"…");
+      try{ const a=await ajouterDepuisAlerte(c); if(a&&a.m) ids.push(a.m.idweb); }catch(e){}
+    }
+    afficherManuels();
+    if(ids.length) notifier("Vigie · "+ids.length+" nouveau"+(ids.length>1?"x":"")+" marché"+(ids.length>1?"s":""),"Import du matin : "+ids.map(id=>manuels[id]&&manuels[id].objet).filter(Boolean).slice(0,3).join(" · "),"vigie-matin");
+    fin({ids,lus:r.lus||0});
+  }catch(e){ fin({erreur:"L'import du matin a échoué : "+(e.name==="TimeoutError"?"la messagerie met trop de temps à répondre.":e.message)}); }
+  finally{ importAutoEnCours=false; }
+}
+function initImportAuto(){
+  afficherMatin();
+  setTimeout(()=>importAutomatique(false),2500);
+  setInterval(()=>importAutomatique(false),30*6e4); // onglet resté ouvert : l'import part au changement de jour
+}
+
 /* ---------- Démarrage ---------- */
 let msMetiers, msDeps, msRegions, minuterie;
 function relancerBientot(){ clearTimeout(minuterie); minuterie=setTimeout(()=>rechercher(0),350); }
@@ -2888,7 +3003,7 @@ function init(){
   majBlocTableau();
   // à l'ouverture : relecture du tableau Excel (décisions « Je ne réponds pas »), sans rien demander
   setTimeout(()=>{ (msConfigure()?msInit().catch(()=>{}):Promise.resolve()).then(()=>synchroTableau(false)); },1500);
-  afficherSources(); majCompteSuivis(); initDecp(); initRappels();
+  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto();
   rechercher(0);
 }
 /* ====================================================================
