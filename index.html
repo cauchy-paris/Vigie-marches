@@ -2526,6 +2526,7 @@ function ouvrirImportMail(){
   const cbTout=el("input",{type:"checkbox"});
   const bTout=el("label",{class:"tout-cocher",hidden:true},cbTout,"Tout sélectionner");
   const bAjout=el("button",{class:"btn btn-plein",type:"button",hidden:true},"Ajouter les marchés cochés");
+  const bSuppr=el("button",{class:"btn btn-rouge",type:"button",hidden:true,title:"Retire de la liste les consultations cochées ; elles ne seront plus proposées"},"Supprimer les cochés");
   const dire=(t,cls)=>{ etat.className="pn-etat "+(cls||""); etat.textContent=t; };
 
   function afficher(){
@@ -2542,23 +2543,31 @@ function ouvrirImportMail(){
         deja?el("span",{class:"res",text:"Déjà dans Vigie"}):null);
       c.li=li; c.cb=cb; liste.append(li);
     });
-    bTout.hidden=bAjout.hidden=!trouves.some(c=>!dejaDansVigie(c));
+    bTout.hidden=bAjout.hidden=bSuppr.hidden=!trouves.some(c=>!dejaDansVigie(c));
     compter();
   }
   function compter(){
     const libres=trouves.filter(c=>c.cb&&!c.cb.disabled), nc=libres.filter(c=>c.coche).length;
     cbTout.checked=!!libres.length&&nc===libres.length; cbTout.indeterminate=nc>0&&nc<libres.length;
-    const n=trouves.filter(c=>c.coche&&!c.cb.disabled).length; bAjout.textContent=n?"Ajouter "+n+" marché"+(n>1?"s":""):"Ajouter les marchés cochés"; bAjout.disabled=!n; }
+    const n=trouves.filter(c=>c.coche&&!c.cb.disabled).length; bSuppr.disabled=!n; bSuppr.textContent=n?"Supprimer "+(n>1?"les "+n+" cochés":"le coché"):"Supprimer les cochés"; bAjout.textContent=n?"Ajouter "+n+" marché"+(n>1?"s":""):"Ajouter les marchés cochés"; bAjout.disabled=!n; }
   function ingerer(mails,info){
     const avant=trouves.length, cles=new Set(trouves.map(c=>c.cle));
     const maintenant=new Date(); let passees=0;
-    for(const m of mails) for(const c of consultationsDuMail(m)) if(!cles.has(c.cle)){ cles.add(c.cle); if(c.limite&&new Date(c.limite)<maintenant){ passees++; continue; } trouves.push(c); }
+    let deja=0, suppr=0;
+    for(const m of mails) for(const c of consultationsDuMail(m)) if(!cles.has(c.cle)){
+      cles.add(c.cle);
+      if(c.limite&&new Date(c.limite)<maintenant){ passees++; continue; }
+      if(dejaDansVigie(c)){ deja++; continue; }
+      if(memo.ignores[c.cle]){ suppr++; continue; } // supprimée lors d'un import précédent
+      trouves.push(c);
+    }
+    if(deja) info=(info?info+", ":"")+deja+" déjà dans Vigie";
+    if(suppr) info=(info?info+", ":"")+suppr+" supprimée"+(suppr>1?"s":"")+" lors d'un import précédent";
     if(passees) info=(info?info+", ":"")+passees+" écartée"+(passees>1?"s":"")+" car la date limite est passée";
     trouves.sort((a,b)=>(b.mail&&b.mail.date||"").localeCompare(a.mail&&a.mail.date||""));
     afficher();
-    const n=trouves.length-avant, nd=trouves.filter(c=>!dejaDansVigie(c)).length;
-    if(n&&!nd){ dire("Les "+n+" consultations trouvées"+(info?" ("+info+")":"")+" sont déjà dans Vigie.","ok"); return; }
-    dire(n?"✓ "+n+" consultation"+(n>1?"s":"")+" trouvée"+(n>1?"s":"")+(info?" ("+info+")":"")+(nd<trouves.length?", dont "+(trouves.length-nd)+" déjà dans Vigie":"")+". Décochez celles qui ne vous intéressent pas, puis ajoutez : elles s'afficheront dans la recherche."
+    const n=trouves.length-avant;
+    dire(n?"✓ "+n+" consultation"+(n>1?"s":"")+" trouvée"+(n>1?"s":"")+(info?" ("+info+")":"")+". Supprimez celles qui ne vous intéressent pas (cochez-les puis « Supprimer »), puis ajoutez les autres : elles s'afficheront dans la recherche."
       :"Aucune nouvelle consultation trouvée"+(info?" ("+info+")":"")+". Si une alerte n'est pas reconnue, collez-la ci-dessous ou ajoutez le marché par son lien.",n?"ok":"ko");
   }
   bOutlook.onclick=async()=>{
@@ -2592,6 +2601,13 @@ function ouvrirImportMail(){
     if(msg&&!mails.length){ dire("Les fichiers .msg d'Outlook ne sont pas lisibles : utilisez « Chercher dans Outlook » ou copiez-collez le mail.","ko"); return; }
     ingerer(mails,mails.length+" fichier"+(mails.length>1?"s":""));
   }
+  bSuppr.onclick=()=>{
+    if(occupe) return;
+    const k=trouves.filter(c=>c.coche&&!c.cb.disabled); if(!k.length) return;
+    k.forEach(c=>memo.ignores[c.cle]=1); ecrire(CLE_MAIL,memo);
+    trouves=trouves.filter(c=>!k.includes(c)); afficher();
+    dire(k.length+" consultation"+(k.length>1?"s":"")+" supprimée"+(k.length>1?"s":"")+" de la liste : elle"+(k.length>1?"s ne seront":" ne sera")+" plus proposée"+(k.length>1?"s":"")+". Les autres restent à ajouter.","ok");
+  };
   cbTout.onchange=()=>{ const v=cbTout.checked; trouves.filter(c=>!c.cb.disabled).forEach(c=>{ c.coche=v; c.cb.checked=v; }); compter(); };
   bAjout.onclick=async()=>{
     if(occupe) return; occupe=true; bAjout.disabled=bOutlook.disabled=true;
@@ -2643,7 +2659,7 @@ function ouvrirImportMail(){
       el("h4",{text:"Ou : copier-coller d'un mail d'alerte"}),
       zone, el("div",{class:"ligne"},bFichiers,fichiers)),
     etat, bTout, liste,
-    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:()=>{ if(!occupe) fermer(); }},"Fermer"),bAjout));
+    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:()=>{ if(!occupe) fermer(); }},"Fermer"),bSuppr,bAjout));
   const fond=el("div",{class:"captcha-fond"},boite);
   fond.addEventListener("click",e=>{ if(e.target===fond&&!occupe) fermer(); });
   document.addEventListener("keydown",echap);
