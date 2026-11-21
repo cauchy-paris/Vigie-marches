@@ -19,3 +19,11 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # comptes Vigie (server/comptes.js)
+      - key: VIGIE_SECRET
+        generateValue: true
+      - key: VIGIE_CODE_INSTALLATION
+        generateValue: true
+      # clé d'API Render (facultative, gratuite) : sauvegarde automatique des comptes dans VIGIE_COMPTES
+      - key: RENDER_API_KEY
+        sync: false
