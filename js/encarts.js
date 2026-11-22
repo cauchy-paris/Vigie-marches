@@ -99,7 +99,7 @@ function carte(m){
   const cible=m.urlDocs||m.urlDepot||m.urlProfil;
   const direct=u=>u&&/\.(pdf|zip|docx?|rar|7z)(\?|$)/i.test(u);
   let atx=null; for(const u of [cible,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
-  if(!atx) atx=atexoParRecherche(m);
+  if(!atx) atx=atexoParRecherche(m); else atx=avecContexte(atx,m);
   const lienRC=atx?atx.rc:(cible||m.urlAvis), lienDCE=atx?atx.dceAuto:(cible||m.urlAvis);
   const titreRC=atx?"Téléchargement direct du règlement de consultation, sans compte":cible?(direct(cible)?"Téléchargement direct":"Ouvre la consultation sur "+(plat?plat.nom:"la plateforme")+" : le RC s'y télécharge, seul ou dans le DCE. "+(plat&&plat.compte?plat.compte+".":"")):"Pas de lien de consultation dans l'annonce : ouvre l'avis BOAMP";
   const docs=el("div",{class:"docs"},
