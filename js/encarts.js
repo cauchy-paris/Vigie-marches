@@ -158,7 +158,7 @@ function corpsEtat(m){
 }
 
 /* ---------- Analyse du RC par l'IA (serveur) ---------- */
-const CLE_ANALYSES="vigie.analyses.v2";
+const CLE_ANALYSES="vigie.analyses.v3";
 function avisTexte(m){
   const l=[];
   const a=(k,v)=>{ if(v&&(!Array.isArray(v)||v.length)) l.push(k+" : "+(Array.isArray(v)?v.join(" ; "):v)); };
@@ -213,20 +213,41 @@ function afficherAnalyse(m,atx,panneau,r){
   const bloc=(titre,...contenu)=>el("section",{class:"ia-bloc"},el("h4",{text:titre}),...contenu);
   const ul=(l,cls)=>el("ul",{class:cls||""},l.map(x=>el("li",{text:x})));
   if(s.synthese) panneau.append(el("p",{class:"ia-synthese",text:s.synthese}));
+  if(s.objet) panneau.append(bloc("Objet",el("p",{class:"ia-objet",text:s.objet})));
   const fiche=el("dl",{class:"ia-fiche"});
   const f=(lib,v,cls)=>{ if(v) fiche.append(el("div",{class:cls||""},el("dt",{text:lib}),el("dd",{text:v}))); };
-  f("Type de marché",s.type_marche); f("Procédure",s.procedure);
+  // calendrier
+  f("Date limite de remise",s.date_limite,"montant");
+  const q=s.questions||{};
+  f("Questions jusqu'au",q.date||(q.jours?q.jours+" jours avant la date limite":""));
+  const vt={obligatoire:"Obligatoire",facultative:"Facultative",non:"Pas de visite"}[s.visite_type]||"";
+  f("Visite",[vt,s.visite_date?"le "+s.visite_date:""].filter(Boolean).join(" ")||"");
+  f("Validité des offres",s.validite_offres);
+  // forme du marché
+  f("Type de marché",s.type_marche); f("Procédure",s.procedure); f("Forme des prix",s.forme_prix);
+  f("Allotissement",s.allotissement);
   f("Montant minimum",s.montant_min,"montant"); f("Montant maximum",s.montant_max,"montant"); f("Montant estimé",s.montant_estime,"montant");
-  f("Durée / délais",s.duree); f("Visite",s.visite); f("Date limite",s.date_limite);
+  f("Variantes",s.variantes); f("PSE",s.pse); f("Tranches",s.tranches); f("Négociation",s.negociation);
+  f("Groupement",s.groupement); f("Garanties et avance",s.garanties);
+  f("Durée / délais",s.duree,"large");
+  if(s.visite) f("Visite (extrait du RC)",s.visite,"large");
+  if(s.variantes_texte&&!/^Variantes (interdites|autorisées)$/.test(s.variantes||"")) f("Variantes (extrait du RC)",s.variantes_texte,"large");
   if(fiche.children.length) panneau.append(fiche);
   if((s.criteres||[]).length){
-    panneau.append(bloc("Critères de notation",el("table",{class:"ia-criteres"},el("tbody",{},s.criteres.map(c=>el("tr",{},
+    const total=s.criteres_total&&Math.abs(s.criteres_total-100)>0.6?" (total lu : "+s.criteres_total+", à vérifier dans le RC)":"";
+    panneau.append(bloc("Critères de notation"+total,el("table",{class:"ia-criteres"},el("tbody",{},s.criteres.map(c=>el("tr",{},
       el("td",{},el("strong",{text:c.critere}),(c.sous_criteres||[]).length?ul(c.sous_criteres,"sous"):null),
       el("td",{class:"poids",text:c.ponderation||"–"})))))));
   }
+  if((s.candidature||[]).length||(s.offre||[]).length){
+    const deux=el("div",{class:"ia-deux"});
+    if((s.candidature||[]).length) deux.append(bloc("Pièces de la candidature",ul(s.candidature,"pieces")));
+    if((s.offre||[]).length) deux.append(bloc("Pièces de l'offre",ul(s.offre,"pieces")));
+    panneau.append(deux);
+  }
   if((s.qualifications||[]).length) panneau.append(bloc("Qualifications demandées",el("div",{class:"ia-qualifs"},s.qualifications.map(x=>el("span",{text:x})))));
   if((s.capacites||[]).length) panneau.append(bloc("Autres conditions de participation",ul(s.capacites)));
-  if((s.attendus||[]).length) panneau.append(bloc("Ce qui est attendu",ul(s.attendus)));
+  if(!s.objet&&(s.attendus||[]).length) panneau.append(bloc("Ce qui est attendu",ul(s.attendus)));
   const lots=(s.lots||[]).filter(l=>l.intitule);
   if(lots.length) panneau.append(bloc("Lots",el("ol",{class:"lots"},lots.map(l=>el("li",{},(l.numero?l.numero+" · ":"")+l.intitule,l.montant?el("span",{class:"lot-mt",text:" · "+l.montant}):null)))));
   if((s.corps_etat||[]).length) panneau.append(bloc("Corps d'état",el("div",{},s.corps_etat.map(x=>el("span",{class:"metier",text:x})))));
@@ -234,9 +255,10 @@ function afficherAnalyse(m,atx,panneau,r){
   const ia=r.mode==="ia";
   if(!ia){
     const manque=[];
+    if(!s.date_limite) manque.push("date limite");
     if(!(s.criteres||[]).length) manque.push("critères de notation");
+    if(!(s.offre||[]).length) manque.push("pièces de l'offre");
     if(!s.montant_min&&!s.montant_max&&!s.montant_estime) manque.push("montants");
-    if(!(s.qualifications||[]).length) manque.push("qualifications");
     if(manque.length) panneau.append(el("p",{class:"ia-source",text:"Non trouvé automatiquement : "+manque.join(", ")+". Consultez le RC pour ces points."}));
   }
   const src=r.source==="rc"?(ia?"Analyse par l'IA du règlement de consultation":"Lecture automatique du règlement de consultation")+(r.fichier?" « "+r.fichier+" »":""):(ia?"Analyse par l'IA de l'avis BOAMP seul":"Lecture automatique de l'avis BOAMP seul")+(r.raisonSansRc?" (RC non lu : "+r.raisonSansRc+")":"");
