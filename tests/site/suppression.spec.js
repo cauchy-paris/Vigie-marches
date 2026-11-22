@@ -13,6 +13,8 @@ const STATUTS = {
 // dossier du PC simulé : système de fichiers privé du navigateur, enregistré comme dossier des réponses
 async function preparer(page, dossiers) {
   await page.route(/exceljs/, route => route.fulfill({ path: require.resolve("exceljs/dist/exceljs.min.js"), contentType: "text/javascript" }));
+  // le dossier privé du navigateur est toujours autorisé : pas de fenêtre d'autorisation (elle bloque le navigateur sans écran de la CI)
+  await page.addInitScript(() => { if (window.FileSystemHandle) { FileSystemHandle.prototype.queryPermission = async () => "granted"; FileSystemHandle.prototype.requestPermission = async () => "granted"; } });
   await page.addInitScript(s => { if (!localStorage.getItem("vigie.statuts.v1")) localStorage.setItem("vigie.statuts.v1", JSON.stringify(s)); }, STATUTS);
   await page.goto("/index.html");
   const noms = await page.evaluate(async dossiers => {
