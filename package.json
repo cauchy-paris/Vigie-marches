@@ -1,0 +1,13 @@
+{
+  "name": "vigie-marches",
+  "private": true,
+  "description": "Vigie Marchés : tests automatiques du site et du serveur (le site lui-même n'a besoin d'aucune compilation)",
+  "scripts": {
+    "test": "npm run test:serveur && npm run test:site",
+    "test:serveur": "cd server && node --test \"test/*.test.js\"",
+    "test:site": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}
