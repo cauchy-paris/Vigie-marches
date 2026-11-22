@@ -156,7 +156,7 @@ code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5
 <ol>
   <li>Ouvrez <a href="https://entra.microsoft.com" target="_blank" rel="noopener">entra.microsoft.com</a> avec le compte qui a déclaré l'application, puis <b>Applications › Inscriptions d'applications › Vigie Marchés</b>.</li>
   <li>Menu <b>Authentification</b> › « Types de comptes pris en charge » : choisissez <b>Comptes dans un annuaire organisationnel (tout locataire Microsoft Entra ID) et comptes Microsoft personnels</b>, puis Enregistrer. (Si l'option est grisée, passez par le menu <b>Manifeste</b> : <code>"signInAudience": "AzureADandPersonalMicrosoftAccount"</code>.)</li>
-  <li>Menu <b>Autorisations des API</b> › Ajouter une autorisation › Microsoft Graph › Autorisations déléguées : cochez <code>Mail.Read</code> (à côté de <code>Files.ReadWrite</code> et <code>User.Read</code> déjà présentes).</li>
+  <li>Menu <b>Autorisations des API</b> › Ajouter une autorisation › Microsoft Graph › Autorisations déléguées : cochez <code>Mail.Read</code> et <code>Files.ReadWrite.All</code> (à côté de <code>Files.ReadWrite</code> et <code>User.Read</code> déjà présentes). <code>Files.ReadWrite.All</code> sert aux dossiers rangés dans un site SharePoint d'équipe (lien en <code>…sharepoint.com/:f:/s/…</code>).</li>
   <li>Prévenez le développeur de Vigie : il active alors la connexion « tous comptes » dans l'application (réglage <code>MS_MULTI</code>).</li>
 </ol>
 <div class="ok">Réglage fait le 22/11/2026 : la connexion Microsoft accepte tous les comptes (professionnels et personnels). Si une entreprise cliente affiche « Approbation de l'administrateur requise », son administrateur approuve « Vigie Marchés » une fois.</div>
