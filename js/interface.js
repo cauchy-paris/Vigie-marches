@@ -36,7 +36,10 @@ function afficherSuivi(){
   });
   const items=tousS.filter(s=>!filtreSuivi||s.statut===filtreSuivi)
     .sort((a,b)=>(a.m.limite||"9999").localeCompare(b.m.limite||"9999")).map(s=>s.m);
-  afficherListe($("#listeSuivi"),items,"Aucun marché suivi pour l'instant. Dans la recherche, cliquez sur « Lecture », « En réflexion » ou « J'y réponds » sur un encart pour le retrouver ici.");
+  const cont=$("#listeSuivi"); cont.innerHTML="";
+  if(!items.length) cont.append(el("div",{class:"etat",text:"Aucun marché suivi pour l'instant. Dans la recherche, cliquez sur « Lecture », « En réflexion » ou « J'y réponds » sur un encart pour le retrouver ici."}));
+  else{ const frag=document.createDocumentFragment(); items.forEach(m=>frag.append(ligneSuivi(m))); cont.append(frag); }
+  majBarreSuivi(items.map(m=>m.idweb));
 }
 
 /* ---------- Multi-sélecteurs ---------- */

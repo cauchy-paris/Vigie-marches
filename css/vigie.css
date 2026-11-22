@@ -375,3 +375,20 @@ select.attribuer{border:1.5px solid var(--trait);border-radius:8px;padding:6px 8
 .bloc-plateformes .pf-etat.ko{color:var(--rouge)}
 .bloc-plateformes .pf-liste{display:grid;gap:14px}
 .badge.source-pf{background:var(--bleu);color:var(--blanc)}
+/* « Mes marchés » : sélection multiple et suppression */
+.suivi-barre{position:sticky;top:8px;z-index:20;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--blanc);border:1.5px solid var(--bleu);border-radius:12px;padding:10px 14px;margin:14px 0;box-shadow:0 6px 18px rgba(13,34,87,.12)}
+.suivi-tout{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--bleu);cursor:pointer}
+.suivi-barre input[type=checkbox],.suivi-coche input{width:22px;height:22px;accent-color:var(--rouge);cursor:pointer;margin:0}
+.suivi-nb{flex:1;min-width:140px;font-size:13px;color:var(--gris)}
+.btn-supprimer{background:var(--rouge);border-color:var(--rouge);color:var(--blanc)}
+.btn-supprimer:hover{filter:brightness(.92)}
+.btn-supprimer:disabled{opacity:.45;cursor:not-allowed;filter:none}
+.suivi-ligne{display:grid;grid-template-columns:34px minmax(0,1fr);gap:8px;align-items:start}
+.suivi-coche{display:flex;justify-content:center;padding-top:16px;cursor:pointer}
+.supp-liste{margin:0;padding:0 0 0 18px;display:grid;gap:8px;max-height:45vh;overflow:auto;font-size:13.5px}
+.supp-liste li{display:grid;gap:2px}
+.supp-a{color:var(--gris);font-size:12.5px}
+.supp-d{font-size:12.5px;color:var(--gris)}
+.supp-d.supp-dossier{color:var(--rouge);font-weight:600;word-break:break-word}
+.supp-option{display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600}
+@media (max-width:600px){.suivi-ligne{grid-template-columns:28px minmax(0,1fr);gap:6px}}

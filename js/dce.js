@@ -268,7 +268,7 @@ function boutonDossier(m){
 function marquerDce(m,fichiers,lieu){
   if(!m||!m.idweb) return;
   if(!statuts[m.idweb]) statuts[m.idweb]={statut:"reponse",date:new Date().toISOString(),m:snapshot(m)};
-  statuts[m.idweb].dce={date:new Date().toISOString(),fichiers:fichiers||0,lieu:lieu||""};
+  statuts[m.idweb].dce={date:new Date().toISOString(),fichiers:fichiers||0,lieu:lieu||"",nom:nomDossier(m)};
   ecrire(CLE_STATUTS,statuts);
   document.querySelectorAll('button[data-dossier="'+CSS.escape(m.idweb)+'"]').forEach(b=>etatDossier(b,statuts[m.idweb].dce));
 }

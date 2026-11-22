@@ -133,6 +133,19 @@ async function accesTableau(interactif){
         if(r2.status===409) r2=await fetch(item(src.id),{method:"PATCH",headers:{...H,"Content-Type":"application/json"},body:corps(nom+" ("+new Date().toLocaleDateString("sv-SE")+")")});
         if(!r2.ok) throw await erreurG(r2,"déplacement de « "+nom+" » impossible");
         return "ok";
+      },
+      // dossiers des consultations (pour la suppression depuis « Mes marchés »)
+      async dossiers(){
+        const liste=[]; let url=item(od.id)+"/children?$select=id,name,folder,webUrl&$top=999";
+        while(url){ const r=await fetch(url,{headers:H}); if(!r.ok) throw await erreurG(r,"lecture du dossier « "+od.nom+" » impossible"); const j=await r.json(); (j.value||[]).forEach(x=>{ if(x.folder) liste.push({nom:x.name,id:x.id,webUrl:x.webUrl}); }); url=j["@odata.nextLink"]||null; }
+        return liste;
+      },
+      corbeille:"la corbeille de OneDrive / SharePoint (récupérable pendant 93 jours)",
+      // DELETE Graph : l'élément part dans la corbeille du drive
+      async supprimer(d){
+        const r=await fetch(item(d.id),{method:"DELETE",headers:H});
+        if(r.status===404) return "absent"; if(!r.ok&&r.status!==204) throw await erreurG(r,"suppression de « "+d.nom+" » impossible");
+        return "ok";
       }
     };
   }
@@ -163,6 +176,12 @@ async function accesTableau(interactif){
       await copier(src,await dest.getDirectoryHandle(cibleNom,{create:true}));
       await racine.removeEntry(nom,{recursive:true});
       return "ok";
+    },
+    async dossiers(){ const liste=[]; for await(const [n,h] of racine.entries()) if(h.kind==="directory") liste.push({nom:n}); return liste; },
+    corbeille:"la corbeille de votre drive synchronisé (OneDrive, Google Drive, Dropbox…) : sur le PC, le dossier est effacé",
+    async supprimer(d){
+      try{ await racine.removeEntry(d.nom,{recursive:true}); return "ok"; }
+      catch(e){ if(e.name==="NotFoundError") return "absent"; throw new Error(e.name==="NoModificationAllowedError"||e.name==="InvalidModificationError"?"un fichier du dossier est ouvert (Word, Excel…) : fermez-le puis réessayez":(e.message||e)); }
     }
   };
 }

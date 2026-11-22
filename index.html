@@ -6,7 +6,7 @@
 <title>Vigie Marchés</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
-<link rel="stylesheet" href="css/vigie.css?v=20261122h">
+<link rel="stylesheet" href="css/vigie.css?v=20261122i">
 </head>
 <body>
 <header class="bandeau">
@@ -168,6 +168,11 @@
       <p class="note-docs">Le fichier « 00_Suivi des marchés.xlsx », dans le même dossier, liste les marchés « J'y réponds » (acheteur, lot, lieu, dates, visite, pondération). Dans la colonne Décision, choisissez « Je ne réponds pas » : à la prochaine ouverture de Vigie, le dossier part dans 05_Abandonnes et le marché sort de Mes marchés. Fermez le fichier dans Excel avant la mise à jour.</p>
       <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-plein" id="btnTableau" type="button">Mettre à jour le tableau Excel</button><a class="btn" id="lienTableau" target="_blank" rel="noopener" hidden>Ouvrir le tableau</a></div>
     </div>
+    <div class="suivi-barre" id="suiviBarre" hidden>
+      <label class="suivi-tout"><input type="checkbox" id="suiviTout"> Tout sélectionner</label>
+      <span class="suivi-nb" id="suiviNb"></span>
+      <button class="btn btn-supprimer" id="btnSupprimer" type="button" disabled>🗑 Supprimer</button>
+    </div>
     <div id="listeSuivi" style="display:grid;gap:14px"></div>
   </section>
 </main>
@@ -272,10 +277,10 @@
 <script src="js/encarts.js?v=20261122h"></script>
 <script src="js/dossier-reponse.js?v=20261122h"></script>
 <script src="js/microsoft.js?v=20261122h"></script>
-<script src="js/dce.js?v=20261122h"></script>
-<script src="js/tableau-excel.js?v=20261122h"></script>
+<script src="js/dce.js?v=20261122i"></script>
+<script src="js/tableau-excel.js?v=20261122i"></script>
 <script src="js/ajout-lien.js?v=20261122h"></script>
-<script src="js/interface.js?v=20261122h"></script>
+<script src="js/interface.js?v=20261122i"></script>
 <script src="js/drive.js?v=20261122h"></script>
 <script src="js/alertes-mail.js?v=20261122h"></script>
 <script src="js/rappels.js?v=20261122h"></script>
@@ -287,6 +292,7 @@
 <script src="js/decp.js?v=20261122h"></script>
 <script src="js/equipe.js?v=20261122h"></script>
 <script src="js/plateformes.js?v=20261122h"></script>
-<script src="js/demarrage.js?v=20261122h"></script>
+<script src="js/suppression.js?v=20261122i"></script>
+<script src="js/demarrage.js?v=20261122i"></script>
 </body>
 </html>
