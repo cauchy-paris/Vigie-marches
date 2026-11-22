@@ -70,6 +70,15 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
 .cx-table td:last-child{text-align:right;white-space:nowrap}
 .cx-table .btn{padding:4px 8px;font-size:12px}
 .cx-ligne{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
+.cx-h2{margin:10px 0 0;font:700 14px/1.2 var(--f-titre,system-ui);color:var(--bleu,#16337a);text-transform:uppercase;letter-spacing:.05em}
+.cx-h3{margin:4px 0 0;font:700 12.5px/1.2 var(--f-titre,system-ui);color:var(--bleu-fonce,#0d2257)}
+.cx-titre-ligne{display:flex;gap:10px;align-items:end;justify-content:space-between;flex-wrap:wrap}
+.cx-options{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.cx-options select,.cx-titre-ligne select,.cx-table select{width:auto}
+.cx-options label{display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px}
+.cx-corps select,.cx-table select{border:1.5px solid var(--trait,#d5ddef);border-radius:8px;padding:5px 8px;font:inherit;font-size:13px;background:#fff;max-width:100%}
+.cx-table tr.cx-suspendu td{color:var(--gris,#5b6785);background:var(--rouge-clair,#fdeced)}
 @media (max-width:560px){.cx-ligne{grid-template-columns:1fr}.cx-table .cx-mail{display:none}}
 .cx-menu{position:absolute;z-index:50;background:#fff;color:var(--encre,#14203d);border-radius:10px;box-shadow:0 12px 32px rgba(13,34,87,.25);min-width:230px;padding:6px;display:grid}
 .cx-menu .cx-qui{padding:8px 10px;font-size:12.5px;color:var(--gris,#5b6785);border-bottom:1px solid var(--trait,#d5ddef);margin-bottom:4px}
@@ -187,6 +196,7 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       el("p", { class: "cx-msg info", text: "Première installation : créez le compte administrateur. Le code d'installation se trouve dans Render, service vigie-marches-dce, onglet Environment, variable VIGIE_CODE_INSTALLATION." }),
       champ("Code d'installation", { name: "code", required: true, autocomplete: "off", spellcheck: "false" }),
       champ("Votre nom", { name: "nom", required: true, autocomplete: "name" }),
+      champ("Votre société", { name: "societe", required: true, autocomplete: "organization" }),
       champ("Adresse mail", { type: "email", name: "email", required: true, autocomplete: "username" }),
       champ("Mot de passe (10 caractères minimum)", { type: "password", name: "motdepasse", required: true, minlength: "10", autocomplete: "new-password" }),
       champ("Mot de passe, encore une fois", { type: "password", name: "confirmation", required: true, minlength: "10", autocomplete: "new-password" }),
@@ -199,7 +209,7 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       if (form.motdepasse.value !== form.confirmation.value) { msg.className = "cx-msg err"; msg.textContent = "Les deux mots de passe sont différents."; return; }
       occupe(form, true, "Création…");
       try {
-        const r = await appel("installation", { code: form.code.value, nom: form.nom.value, email: form.email.value, motdepasse: form.motdepasse.value });
+        const r = await appel("installation", { code: form.code.value, nom: form.nom.value, societe: form.societe.value, email: form.email.value, motdepasse: form.motdepasse.value });
         garder({ jeton: r.jeton, lien: r.lien, compte: r.compte });
         const b = blocSauvegarde(r.sauvegarde);
         if (b) { form.replaceChildren(el("p", { class: "cx-msg ok", text: "Compte administrateur créé." }), b, el("button", { type: "button", class: "btn btn-plein", text: "Continuer", onclick: () => { v.remove(); entrer(suite); } })); }
@@ -239,40 +249,110 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       } catch (err) { msg.className = "cx-msg err"; msg.textContent = err.message; occupe(form, false); }
     };
   }
+  const ROLES_LIB = { admin: "Administrateur Vigie", gerant: "Administrateur de la société", utilisateur: "Utilisateur" };
+  const sousTitre = texte => el("h2", { class: "cx-h2", text: texte });
+  function telecharger(nom, objet) {
+    const a = el("a", { href: URL.createObjectURL(new Blob([JSON.stringify(objet, null, 1)], { type: "application/json" })), download: nom });
+    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
   async function gererComptes() {
     const msg = el("div", { role: "status" });
-    const tbody = el("tbody");
-    const form = el("form", { class: "cx-ligne" },
-      champ("Nom", { name: "nom", required: true }),
-      champ("Adresse mail", { type: "email", name: "email", required: true }),
-      bouton("Créer le compte", "btn-plein"));
-    const role = el("label", { class: "cx-petit", style: "display:flex;gap:6px;align-items:center;font-weight:400" }, el("input", { type: "checkbox", name: "admin", style: "width:auto" }), "Administrateur (peut gérer les comptes)");
-    fenetre("Gérer les comptes", [
-      el("p", { class: "cx-petit", text: "Chaque personne a son propre compte. Les marchés suivis, filtres et connexions (drive, messagerie) restent dans le navigateur de chacun." }),
-      el("table", { class: "cx-table" }, el("thead", {}, el("tr", {}, el("th", { text: "Nom" }), el("th", { class: "cx-mail", text: "Adresse mail" }), el("th", { text: "Rôle" }), el("th"))), tbody),
-      el("h2", { style: "margin:8px 0 0;font:700 14px/1 var(--f-titre,system-ui);color:var(--bleu,#16337a);text-transform:uppercase;letter-spacing:.05em", text: "Nouveau compte" }),
-      form, role, msg]);
-    const afficher = (texte, cls, extra) => { msg.replaceChildren(...[el("p", { class: "cx-msg " + cls, text: texte }), extra].filter(Boolean)); };
+    const zoneSocietes = el("div"), zoneComptes = el("div"), zoneSauvegarde = el("div"), entete = el("p", { class: "cx-petit" });
+    const d = fenetre("Gérer les comptes", [entete, zoneSocietes, zoneComptes, msg, zoneSauvegarde]);
+    d.classList.add("cx-large");
+    const afficher = (texte, cls, extra) => { msg.replaceChildren(...[el("p", { class: "cx-msg " + cls, text: texte }), extra].filter(Boolean)); msg.scrollIntoView({ block: "nearest" }); };
     const remettre = (email, mdp, sauvegarde) => afficher("Mot de passe provisoire de " + email + " (à lui transmettre ; il le changera à sa première connexion) :", "ok",
       el("div", { style: "display:grid;gap:8px;margin-top:8px" }, el("div", { class: "cx-code", text: mdp }), blocSauvegarde(sauvegarde)));
+    const agir = async (f, ok) => { try { const x = await f(); if (ok) afficher(ok, "ok", blocSauvegarde(x && x.sauvegarde)); await charger(); return x; } catch (e) { afficher(e.message, "err"); } };
+    let filtre = "";
+
     async function charger() {
-      try {
-        const r = await appel("liste");
-        tbody.replaceChildren(...r.comptes.map(c => el("tr", {},
-          el("td", { text: c.nom + (c.provisoire ? " (provisoire)" : "") }), el("td", { class: "cx-mail", text: c.email }), el("td", { text: c.role === "admin" ? "Administrateur" : "Utilisateur" }),
-          el("td", {}, c.email === session.compte.email ? el("span", { class: "cx-petit", text: "vous" }) : [
+      let r;
+      try { r = await appel("liste"); } catch (e) { afficher(e.message, "err"); return; }
+      const admin = r.moi.role === "admin";
+      const nomSoc = Object.fromEntries(r.societes.map(x => [x.id, x.nom]));
+      const ma = r.societes.find(x => x.id === r.moi.societe);
+      entete.textContent = admin
+        ? "Chaque société cliente a ses comptes et son administrateur. Les marchés suivis, filtres et connexions (drive, messagerie) restent dans le navigateur de chacun."
+        : "Société « " + (ma ? ma.nom : "") + " » : " + (ma ? ma.comptes + (ma.places != null ? " compte(s) sur " + ma.places + " prévus" : " compte(s)") : "") + ". Les marchés suivis, filtres et connexions (drive, messagerie) restent dans le navigateur de chacun.";
+
+      // ----- sociétés (administrateur Vigie) -----
+      if (admin) {
+        const formSoc = el("form", { class: "cx-ligne" },
+          champ("Nom de la société", { name: "nom", required: true }),
+          champ("Nombre de comptes (vide = sans limite)", { type: "number", name: "places", min: "1", max: "1000" }),
+          bouton("Créer la société", "btn-plein"));
+        formSoc.onsubmit = async e => { e.preventDefault(); occupe(formSoc, true, "Création…"); const x = await agir(() => appel("societe/creer", { nom: formSoc.nom.value, places: formSoc.places.value }), "Société créée."); if (x) { filtre = x.societe.id; formSoc.reset(); await charger(); } occupe(formSoc, false); };
+        zoneSocietes.replaceChildren(sousTitre("Sociétés clientes"),
+          el("table", { class: "cx-table" },
+            el("thead", {}, el("tr", {}, el("th", { text: "Société" }), el("th", { text: "Comptes" }), el("th", { text: "Accès" }), el("th"))),
+            el("tbody", {}, r.societes.map(x => el("tr", { class: x.actif ? null : "cx-suspendu" },
+              el("td", { text: x.nom + (x.id === r.moi.societe ? " (la vôtre)" : "") }),
+              el("td", { text: x.comptes + (x.places != null ? " / " + x.places : "") }),
+              el("td", { text: x.actif ? "Ouvert" : "Suspendu" }),
+              el("td", {},
+                el("button", { type: "button", class: "btn", text: "Renommer", onclick: () => { const n = prompt("Nouveau nom de la société :", x.nom); if (n && n.trim() && n.trim() !== x.nom) agir(() => appel("societe/modifier", { id: x.id, nom: n.trim() }), "Société renommée."); } }), " ",
+                el("button", { type: "button", class: "btn", text: "Nombre de comptes", onclick: () => { const n = prompt("Nombre de comptes prévus pour « " + x.nom + " » (vide = sans limite) :", x.places == null ? "" : x.places); if (n !== null) agir(() => appel("societe/modifier", { id: x.id, places: n.trim() }), "Nombre de comptes enregistré."); } }), " ",
+                x.id === r.moi.societe ? null : el("button", { type: "button", class: "btn" + (x.actif ? " btn-rouge" : ""), text: x.actif ? "Suspendre" : "Réactiver", onclick: () => { if (x.actif && !confirm("Suspendre l'accès de « " + x.nom + " » ? Ses comptes ne pourront plus se connecter jusqu'à la réactivation.")) return; agir(() => appel("societe/modifier", { id: x.id, actif: !x.actif }), x.actif ? "Accès suspendu." : "Accès réactivé."); } }), " ",
+                x.comptes ? null : el("button", { type: "button", class: "btn btn-rouge", text: "Supprimer", onclick: () => { if (confirm("Supprimer la société « " + x.nom + " » ?")) agir(() => appel("societe/supprimer", { id: x.id }), "Société supprimée."); } })))))),
+          el("h3", { class: "cx-h3", text: "Nouvelle société" }), formSoc);
+      }
+
+      // ----- comptes -----
+      if (admin && filtre && !nomSoc[filtre]) filtre = "";
+      const choixFiltre = admin ? el("select", { "aria-label": "Société affichée", onchange: e => { filtre = e.target.value; charger(); } },
+        el("option", { value: "", text: "Toutes les sociétés" }), r.societes.map(x => el("option", { value: x.id, text: x.nom, selected: x.id === filtre }))) : null;
+      const liste = r.comptes.filter(c => !filtre || (c.societe && c.societe.id === filtre));
+      const choixRole = (valeur, attrs = {}) => el("select", attrs, r.roles.map(k => el("option", { value: k, text: ROLES_LIB[k], selected: k === valeur })));
+      const lignes = liste.map(c => {
+        const vous = c.email === session.compte.email;
+        const role = vous || !r.roles.includes(c.role) ? el("span", { text: ROLES_LIB[c.role] || c.role }) : choixRole(c.role, { "aria-label": "Rôle de " + c.email, onchange: e => agir(() => appel("modifier", { email: c.email, role: e.target.value }), "Rôle changé.") });
+        const soc = !admin ? null : vous ? el("span", { text: c.societe ? c.societe.nom : "" })
+          : el("select", { "aria-label": "Société de " + c.email, onchange: e => agir(() => appel("modifier", { email: c.email, societe: e.target.value }), "Compte déplacé.") }, r.societes.map(x => el("option", { value: x.id, text: x.nom, selected: c.societe && x.id === c.societe.id })));
+        return el("tr", {},
+          el("td", { text: c.nom + (c.provisoire ? " (provisoire)" : "") }), el("td", { class: "cx-mail", text: c.email }),
+          admin ? el("td", {}, soc) : null, el("td", {}, role),
+          el("td", {}, vous ? el("span", { class: "cx-petit", text: "vous" }) : [
             el("button", { type: "button", class: "btn", text: "Nouveau mot de passe", onclick: async () => { if (!confirm("Donner un nouveau mot de passe provisoire à " + c.email + " ? L'ancien ne marchera plus.")) return; try { const x = await appel("reinitialiser", { email: c.email }); remettre(c.email, x.motdepasse, x.sauvegarde); charger(); } catch (e) { afficher(e.message, "err"); } } }), " ",
-            el("button", { type: "button", class: "btn btn-rouge", text: "Supprimer", onclick: async () => { if (!confirm("Supprimer le compte de " + c.email + " ?")) return; try { const x = await appel("supprimer", { email: c.email }); afficher("Compte supprimé.", "ok", blocSauvegarde(x.sauvegarde)); charger(); } catch (e) { afficher(e.message, "err"); } } })]))));
-      } catch (e) { afficher(e.message, "err"); }
+            el("button", { type: "button", class: "btn btn-rouge", text: "Supprimer", onclick: () => { if (confirm("Supprimer le compte de " + c.email + " ?")) agir(() => appel("supprimer", { email: c.email }), "Compte supprimé."); } })]));
+      });
+      const form = el("form", { class: "cx-ligne" },
+        champ("Nom", { name: "nom", required: true }),
+        champ("Adresse mail", { type: "email", name: "email", required: true }),
+        bouton("Créer le compte", "btn-plein"));
+      const selRole = choixRole("utilisateur", { name: "role" });
+      const selSoc = admin ? el("select", { name: "societe" }, r.societes.map(x => el("option", { value: x.id, text: x.nom, selected: x.id === (filtre || r.moi.societe) }))) : null;
+      const options = el("div", { class: "cx-options" }, el("label", {}, "Rôle", selRole), selSoc ? el("label", {}, "Société", selSoc) : null);
+      form.onsubmit = async e => {
+        e.preventDefault(); occupe(form, true, "Création…");
+        try {
+          const x = await appel("creer", { nom: form.nom.value, email: form.email.value, role: selRole.value, ...(selSoc ? { societe: selSoc.value } : {}) });
+          remettre(form.email.value.trim().toLowerCase(), x.motdepasse, x.sauvegarde); form.reset(); await charger();
+        } catch (err) { afficher(err.message, "err"); }
+        occupe(form, false);
+      };
+      zoneComptes.replaceChildren(
+        el("div", { class: "cx-titre-ligne" }, sousTitre("Comptes"), choixFiltre),
+        el("table", { class: "cx-table" },
+          el("thead", {}, el("tr", {}, el("th", { text: "Nom" }), el("th", { class: "cx-mail", text: "Adresse mail" }), admin ? el("th", { text: "Société" }) : null, el("th", { text: "Rôle" }), el("th"))),
+          el("tbody", {}, lignes.length ? lignes : el("tr", {}, el("td", { colspan: "5", class: "cx-petit", text: "Aucun compte." })))),
+        el("h3", { class: "cx-h3", text: "Nouveau compte" }), form, options,
+        el("p", { class: "cx-petit", text: "Administrateur de la société : peut créer et gérer les comptes de sa société." + (admin ? " Administrateur Vigie : gère toutes les sociétés." : "") }));
+
+      // ----- sauvegarde (administrateur Vigie) -----
+      if (admin) {
+        const copies = r.base ? await appel("copies").then(x => x.copies).catch(() => []) : [];
+        const choixCopie = copies.length ? el("select", { "aria-label": "Copie automatique" }, copies.map(x => el("option", { value: x.jour, text: new Date(x.jour + "T12:00:00").toLocaleDateString("fr-FR") + " (" + x.comptes + " comptes)" }))) : null;
+        zoneSauvegarde.replaceChildren(sousTitre("Sauvegarde"),
+          el("p", { class: "cx-petit", text: r.base
+            ? "Les comptes sont enregistrés dans la base de données, avec une copie automatique chaque jour (30 jours gardés). Téléchargez aussi une sauvegarde de temps en temps et gardez-la en lieu sûr : elle contient les empreintes des mots de passe."
+            : "Les comptes sont enregistrés dans la variable VIGIE_COMPTES de Render. Téléchargez une sauvegarde de temps en temps et gardez-la en lieu sûr : elle contient les empreintes des mots de passe." }),
+          el("div", { class: "cx-options" },
+            el("button", { type: "button", class: "btn btn-plein", text: "Télécharger une sauvegarde", onclick: async () => { try { telecharger("vigie-comptes-" + new Date().toISOString().slice(0, 10) + ".json", await appel("sauvegarde")); } catch (e) { afficher(e.message, "err"); } } }),
+            choixCopie ? el("span", { class: "cx-options" }, choixCopie, el("button", { type: "button", class: "btn", text: "Télécharger cette copie", onclick: async () => { try { telecharger("vigie-comptes-" + choixCopie.value + ".json", await appel("sauvegarde?jour=" + choixCopie.value)); } catch (e) { afficher(e.message, "err"); } } })) : null),
+          el("p", { class: "cx-petit" }, el("a", { href: "aide/comptes.html#sauvegarde", target: "_blank", rel: "noopener", text: "Aide : sauvegarde et restauration" })));
+      }
     }
-    form.onsubmit = async e => {
-      e.preventDefault(); occupe(form, true, "Création…");
-      try {
-        const r = await appel("creer", { nom: form.nom.value, email: form.email.value, role: role.querySelector("input").checked ? "admin" : "utilisateur" });
-        remettre(form.email.value.trim().toLowerCase(), r.motdepasse, r.sauvegarde); form.reset(); role.querySelector("input").checked = false; charger();
-      } catch (err) { afficher(err.message, "err"); }
-      occupe(form, false);
-    };
     charger();
   }
 
@@ -290,14 +370,14 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     const item = (texte, action, cls) => el("button", { type: "button", role: "menuitem", class: cls || null, onclick: () => { m.remove(); action(); } }, texte);
     const synchro = window.Synchro && window.Synchro.etat();
     const m = el("div", { class: "cx-menu", role: "menu", style: `top:${r.bottom + window.scrollY + 6}px;right:${Math.max(8, document.documentElement.clientWidth - r.right)}px` },
-      el("div", { class: "cx-qui" }, el("b", { text: c.nom }), c.email + (c.role === "admin" ? " · administrateur" : "")),
+      el("div", { class: "cx-qui" }, el("b", { text: c.nom }), c.email + (c.societe ? " · " + c.societe.nom : "") + (c.role === "admin" ? " · administrateur Vigie" : c.role === "gerant" ? " · administrateur" : "")),
       el("div", { class: "cx-titre", text: "Connexions" }),
       document.querySelector("#btnOd") ? item("☁  Mon drive (OneDrive, dossier du PC…)", () => cliquer("#btnOd")) : null,
       document.querySelector("#btnMail") ? item("✉  Alertes mail", () => cliquer("#btnMail")) : null,
       synchro ? el("div", { class: "cx-note", text: synchro }) : null,
       el("div", { class: "cx-titre", text: "Mon compte" }),
       item("🔑  Changer mon mot de passe", () => changerMotDePasse(false)),
-      c.role === "admin" ? item("👥  Gérer les comptes", gererComptes) : null,
+      c.role === "admin" || c.role === "gerant" ? item("👥  Gérer les comptes", gererComptes) : null,
       item("↩  Se déconnecter", deconnecter, "rouge"));
     document.body.appendChild(m);
     setTimeout(() => document.addEventListener("click", function f(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("click", f); } }), 0);

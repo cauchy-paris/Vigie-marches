@@ -39,7 +39,7 @@ code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5
   <p>Vigie Marchés est réservé aux personnes à qui l'administrateur a créé un compte. Cette page explique l'installation (une seule fois) et la gestion des comptes.</p>
 </div></header>
 <main>
-<nav><a href="#installation">1. Installation</a> <a href="#sauvegarde">2. Sauvegarde automatique</a> <a href="#comptes">3. Créer les comptes</a> <a href="#utilisateur">4. Pour chaque utilisateur</a> <a href="#oubli">5. Mot de passe oublié</a> <a href="#securite">6. Ce qui est protégé</a></nav>
+<nav><a href="#installation">1. Installation</a> <a href="#sauvegarde">2. Base de données des comptes</a> <a href="#comptes">3. Sociétés et comptes</a> <a href="#utilisateur">4. Pour chaque utilisateur</a> <a href="#oubli">5. Mot de passe oublié</a> <a href="#securite">6. Ce qui est protégé</a></nav>
 
 <section id="installation">
 <h2>1. Installation : créer le compte administrateur</h2>
@@ -48,31 +48,45 @@ code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5
 <li>Ouvrez <a href="https://dashboard.render.com" target="_blank" rel="noopener">dashboard.render.com</a> et cliquez sur le service <code>vigie-marches-dce</code>.</li>
 <li>Menu de gauche <b>Environment</b> : repérez la variable <code>VIGIE_CODE_INSTALLATION</code>, cliquez sur l'œil pour l'afficher, puis copiez sa valeur.</li>
 <li>Ouvrez <a href="https://vigie-marches.onrender.com" target="_blank" rel="noopener">Vigie Marchés</a> : l'écran « Installation » s'affiche.</li>
-<li>Collez le code, puis indiquez votre nom, votre adresse mail et un mot de passe d'au moins 10 caractères. Cliquez sur <span class="bouton">Créer le compte administrateur</span>.</li>
+<li>Collez le code, puis indiquez votre nom, le nom de votre société, votre adresse mail et un mot de passe d'au moins 10 caractères. Cliquez sur <span class="bouton">Créer le compte administrateur</span>.</li>
 </ol>
 <p class="astuce">Le serveur gratuit s'endort après 15 minutes sans visite : la première connexion de la journée peut prendre jusqu'à une minute.</p>
 </section>
 
 <section id="sauvegarde">
-<h2>2. Sauvegarde automatique des comptes (recommandé)</h2>
-<p>Les comptes sont gardés dans la variable <code>VIGIE_COMPTES</code> du service Render (les mots de passe y sont chiffrés de façon irréversible). Pour que Vigie la mette à jour tout seul à chaque création de compte ou changement de mot de passe, donnez-lui une clé d'API Render (gratuite) :</p>
+<h2>2. Base de données des comptes (recommandé)</h2>
+<p>Avec une base de données, chaque création de compte ou de société et chaque changement de mot de passe sont enregistrés tout de suite, sans redémarrer le serveur. Une copie complète est aussi faite chaque jour (30 jours gardés). La base gratuite de Neon suffit largement.</p>
 <ol>
-<li>Sur Render, cliquez sur votre avatar en haut à droite, puis <b>Account Settings</b>, rubrique <b>API Keys</b>, bouton <b>Create API Key</b>. Nommez-la « Vigie » et copiez la clé.</li>
-<li>Revenez sur le service <code>vigie-marches-dce</code>, menu <b>Environment</b>. Remplissez la variable <code>RENDER_API_KEY</code> (ou ajoutez-la avec <b>Add Environment Variable</b>) avec la clé copiée.</li>
-<li>Cliquez sur <b>Save, rebuild, and deploy</b>. Attendez environ deux minutes.</li>
+<li>Ouvrez <a href="https://neon.tech" target="_blank" rel="noopener">neon.tech</a> et créez un compte gratuit (bouton <b>Sign up</b>, avec votre compte Google ou votre adresse mail).</li>
+<li>Créez un projet : nom <code>vigie</code>, région <b>AWS Europe Central 1 (Frankfurt)</b> (les données restent en Europe), le reste par défaut. Cliquez sur <b>Create project</b>.</li>
+<li>Sur la page du projet, cliquez sur <b>Connect</b> puis copiez l'adresse de connexion. Elle commence par <code>postgresql://</code> et finit par <code>sslmode=require</code>. Gardez-la secrète : elle donne accès à la base.</li>
+<li>Sur <a href="https://dashboard.render.com" target="_blank" rel="noopener">Render</a>, service <code>vigie-marches-dce</code>, menu <b>Environment</b> : ajoutez la variable <code>DATABASE_URL</code> (bouton <b>Add Environment Variable</b>) avec l'adresse copiée, puis cliquez sur <b>Save, rebuild, and deploy</b>. Attendez environ deux minutes.</li>
+<li>Ouvrez Vigie et connectez-vous comme d'habitude : vos comptes ont été recopiés tout seuls depuis <code>VIGIE_COMPTES</code>, avec les mêmes mots de passe. Ils sont rangés dans une société nommée « Société principale » : renommez-la (⚙ puis <b>Gérer les comptes</b>, bouton <span class="bouton">Renommer</span>).</li>
 </ol>
-<p class="attention">Sans cette clé, chaque changement de compte affiche un texte à copier vous-même dans la variable <code>VIGIE_COMPTES</code> (même écran Environment, puis <b>Save, rebuild, and deploy</b>). Si vous l'oubliez, le changement est perdu au prochain redémarrage du serveur, y compris le compte administrateur créé à l'installation (il suffit alors de refaire l'installation).</p>
-<p class="astuce">Avec la clé, le serveur redémarre de lui-même une minute après chaque changement de compte, pour l'enregistrer. Vigie reste utilisable pendant ce temps.</p>
+<p class="astuce">Ensuite, la clé <code>RENDER_API_KEY</code> ne sert plus et peut être supprimée. Laissez <code>VIGIE_COMPTES</code> en place : elle n'est relue que si la base est vide.</p>
+<p class="attention">Sans base de données, Vigie fonctionne comme avant : les comptes restent dans la variable <code>VIGIE_COMPTES</code>, mise à jour par la clé <code>RENDER_API_KEY</code> (le serveur redémarre une minute après chaque changement), ou à la main avec le texte affiché après chaque changement.</p>
+<h3 id="restauration">Sauvegarde et restauration</h3>
+<ul>
+<li>⚙ puis <b>Gérer les comptes</b>, rubrique Sauvegarde : <span class="bouton">Télécharger une sauvegarde</span> donne un fichier <code>vigie-comptes-AAAA-MM-JJ.json</code> avec toutes les sociétés et tous les comptes. Les copies automatiques des 30 derniers jours se téléchargent au même endroit. Gardez ces fichiers en lieu sûr : ils contiennent les empreintes des mots de passe.</li>
+<li>Pour restaurer : créez une base vide (nouveau projet Neon), mettez sa nouvelle adresse dans <code>DATABASE_URL</code>, et collez tout le contenu du fichier de sauvegarde dans <code>VIGIE_COMPTES</code>. Au démarrage, Vigie recopie la sauvegarde dans la base vide. Tout le monde garde son mot de passe.</li>
+</ul>
 </section>
 
 <section id="comptes">
-<h2>3. Créer les comptes des utilisateurs</h2>
+<h2>3. Sociétés clientes et comptes</h2>
+<p>Chaque compte appartient à une société. Il y a trois rôles :</p>
+<ul>
+<li><b>Administrateur Vigie</b> (vous) : crée les sociétés clientes, fixe leur nombre de comptes, suspend ou réactive leur accès, et gère tous les comptes.</li>
+<li><b>Administrateur de la société</b> : crée et gère les comptes de sa propre société seulement, dans la limite du nombre de comptes prévu.</li>
+<li><b>Utilisateur</b> : utilise Vigie, sans accès à la gestion des comptes.</li>
+</ul>
 <ol>
 <li>Dans Vigie, cliquez sur l'engrenage ⚙ en haut à droite, puis <b>Gérer les comptes</b>.</li>
-<li>Saisissez le nom et l'adresse mail de la personne, puis <span class="bouton">Créer le compte</span>. Cochez « Administrateur » seulement si elle doit pouvoir gérer les comptes.</li>
-<li>Vigie affiche un <b>mot de passe provisoire</b> : transmettez-le à la personne (par téléphone ou SMS de préférence). Il ne sera plus affiché ensuite.</li>
+<li>Pour un nouveau client : rubrique <b>Sociétés clientes</b>, saisissez son nom et le nombre de comptes de son abonnement (vide = sans limite), puis <span class="bouton">Créer la société</span>.</li>
+<li>Rubrique <b>Comptes</b> : saisissez le nom et l'adresse mail de la personne, choisissez son rôle et sa société, puis <span class="bouton">Créer le compte</span>. Créez au moins un « Administrateur de la société » par client : il créera lui-même les comptes de ses collègues.</li>
+<li>Un mot de passe provisoire s'affiche : transmettez-le à la personne. Elle choisira le sien à sa première connexion.</li>
 </ol>
-<p>Dans la même fenêtre : <b>Nouveau mot de passe</b> (mot de passe oublié : un nouveau provisoire est créé et l'ancien ne marche plus) et <b>Supprimer</b> (la personne est déconnectée aussitôt de tous ses appareils).</p>
+<p class="astuce"><span class="bouton">Suspendre</span> coupe tout de suite l'accès de tous les comptes d'une société (par exemple un abonnement non renouvelé), sans rien effacer. <span class="bouton">Réactiver</span> le rend.</p>
 </section>
 
 <section id="utilisateur">

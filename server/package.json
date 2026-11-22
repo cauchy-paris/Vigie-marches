@@ -12,8 +12,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
-    "pdfjs-dist": "^4.10.38",
     "imapflow": "^1.0.191",
-    "mailparser": "^3.7.2"
+    "mailparser": "^3.7.2",
+    "pdfjs-dist": "^4.10.38",
+    "pg": "^8.23.1"
   }
 }

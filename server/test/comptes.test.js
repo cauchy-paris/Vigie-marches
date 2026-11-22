@@ -2,10 +2,10 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { demarrerServeur } = require("./aide");
+const { demarrerServeur, baseNeuve } = require("./aide");
 
-test("comptes : parcours complet", async t => {
-  const s = await demarrerServeur();
+for (const mode of ["variable", "base"]) test("comptes : parcours complet (" + mode + ")", { skip: mode === "base" && !process.env.TEST_DATABASE_URL && "TEST_DATABASE_URL absent" }, async t => {
+  const s = await demarrerServeur(mode === "base" ? { DATABASE_URL: await baseNeuve() } : {});
   t.after(s.arreter);
 
   await t.test("avant installation, aucun compte", async () => {
@@ -113,7 +113,7 @@ test("comptes : parcours complet", async t => {
   });
 });
 
-test("comptes : les comptes enregistrés dans VIGIE_COMPTES sont relus au démarrage", async t => {
+test("comptes : les comptes enregistrés dans VIGIE_COMPTES (ancien format) sont relus au démarrage", async t => {
   const crypto = require("crypto");
   const sel = "0123456789abcdef";
   const h = sel + ":" + crypto.scryptSync("motdepasse-solide", sel, 32).toString("hex");

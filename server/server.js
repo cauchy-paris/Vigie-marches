@@ -8,7 +8,7 @@ const { textePdf, analyserTexte } = require("./regles");
 const onedrive = require("./onedrive");
 const { extraireFiche } = require("./fiche");
 const { lireAlertes } = require("./mail");
-const { routeCompte, compteDe, dechiffrer } = require("./comptes");
+const { routeCompte, compteDe, dechiffrer, comptesPrets } = require("./comptes");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -831,6 +831,8 @@ http.createServer(async (req, res) => {
   // Toutes les autres routes sont réservées aux utilisateurs connectés à Vigie.
   // /dce/captcha n'a pas besoin du jeton : le jeton du CAPTCHA (10 min) n'est remis qu'à un utilisateur connecté.
   if (u.pathname !== "/dce/captcha") {
+    // au démarrage, tant que les comptes ne sont pas relus : « réessayez », sans déconnecter personne
+    if (!comptesPrets()) return json(res, 503, { erreur: "demarrage", ok: false, message: "Le serveur Vigie démarre : réessayez dans quelques secondes." });
     req.compte = compteDe(req, u);
     if (!req.compte) {
       if (!o) return pageConnexion(res); // lien ouvert dans un onglet
