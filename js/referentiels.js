@@ -118,16 +118,26 @@ const SERVEUR_DCE="https://vigie-marches-dce.onrender.com";
 // Plateformes Atexo prises en charge par le serveur (doit suivre la liste du serveur)
 const HOTES_ATEXO=/(^|\.)(marches-publics\.gouv\.fr|maximilien\.fr|e-megalisbretagne\.org|alsacemarchespublics\.eu|marchespublics\.grandest\.fr|marchespublics\.auvergnerhonealpes\.eu|marches-publics\.hautsdefrance\.fr|marchespublics\.nouvelle-aquitaine\.fr|marches\.ampmetropole\.fr|ternum-bfc\.fr|marches\.paysdelaloire\.fr)$/i;
 /* Quand l'avis ne donne que l'accueil de la plateforme : le serveur retrouve la consultation par sa référence. */
+// Référence, intitulé, date limite et acheteur de l'avis : permettent au serveur de retrouver la consultation
+// sur la plateforme quand le lien de l'avis est absent, obsolète ou mène à « Aucune consultation trouvée ».
+function contexteRecherche(m){
+  const refs=[m.refDocs,m.refAcheteur].filter(r=>r&&r.length>=3&&r.length<=60&&!/^(LOT|ORG|PAR|RES|TPO)-\d+$/i.test(r)&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(r)&&!/^(sans objet|n[ée]ant|n\/?a|non communiqu[ée])$/i.test(r.trim()));
+  let lim=""; try{ if(m.limite) lim=new Date(m.limite).toLocaleDateString("sv-SE",{timeZone:"Europe/Paris"}); }catch(e){}
+  return (refs[0]?"&reference="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200))+(lim?"&limite="+lim:"")+(m.acheteur?"&acheteur="+encodeURIComponent(m.acheteur.slice(0,120)):"");
+}
 function atexoParRecherche(m){
   for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){
     let x; try{ x=new URL(u); }catch(e){ continue; }
     if(!HOTES_ATEXO.test(x.hostname)) continue;
-    const refs=[m.refDocs,m.refAcheteur].filter(r=>r&&r.length>=3&&r.length<=60&&!/^(LOT|ORG|PAR|RES|TPO)-\d+$/i.test(r)&&!/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(r)&&!/^(sans objet|n[ée]ant|n\/?a|non communiqu[ée])$/i.test(r.trim()));
-    let lim=""; try{ if(m.limite) lim=new Date(m.limite).toLocaleDateString("sv-SE",{timeZone:"Europe/Paris"}); }catch(e){}
-    const q="origine="+encodeURIComponent(x.origin)+(refs[0]?"&reference="+encodeURIComponent(refs[0]):"")+"&objet="+encodeURIComponent((m.objet||"").slice(0,200))+(lim?"&limite="+lim:"")+(m.acheteur?"&acheteur="+encodeURIComponent(m.acheteur.slice(0,120)):"");
+    const q="origine="+encodeURIComponent(x.origin)+contexteRecherche(m);
     return {rc:SERVEUR_DCE+"/dce?quoi=rc&"+q, dceAuto:SERVEUR_DCE+"/dce?"+q, consultation:SERVEUR_DCE+"/dce?quoi=consultation&"+q, recherche:true};
   }
   return null;
+}
+// Lien Atexo avec un identifiant : on joint aussi le contexte, pour que le serveur se rattrape si l'identifiant ne donne rien
+function avecContexte(atx,m){
+  if(!atx||atx.recherche||!atx.dceAuto||/[?&]objet=/.test(atx.dceAuto)) return atx;
+  return {...atx,dceAuto:atx.dceAuto+contexteRecherche(m)};
 }
 function atexoLiens(url){
   if(!url) return null;

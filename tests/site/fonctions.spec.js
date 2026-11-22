@@ -110,3 +110,12 @@ test("tableau Excel : colonne « Collaborateur désigné », remplie avec son pr
   expect(r.nom).toBe("Test");
   expect(r.vide).toBe("");
 });
+
+test("lien du DCE Atexo : référence, intitulé et date limite joints pour le repli du serveur", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const m = { objet: "Dispositifs médicaux consommables", refDocs: "REF-42", limite: "2027-01-08T15:00:00Z", acheteur: "AP-HP" };
+    const atx = avecContexte(atexoLiens("https://marches.maximilien.fr/entreprise/consultation/912345?orgAcronyme=a1b"), m);
+    return Object.fromEntries(new URL(atx.dceAuto).searchParams);
+  });
+  expect(r).toMatchObject({ origine: "https://marches.maximilien.fr", id: "912345", org: "a1b", reference: "REF-42", objet: "Dispositifs médicaux consommables", limite: "2027-01-08", acheteur: "AP-HP" });
+});

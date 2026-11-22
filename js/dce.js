@@ -219,7 +219,7 @@ async function preparerDossier(m){
     J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" », avec Analyse, Candidature, Offre et Contrôle","ok");
     // le DCE
     let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
-    if(!atx) atx=atexoParRecherche(m);
+    if(!atx) atx=atexoParRecherche(m); else atx=avecContexte(atx,m);
     const pc=!atx&&pageACode(m);
     if(!atx&&!pc&&!extensionDispo()){
       J.ligne("Cette plateforme demande un code de vérification ou un compte : Vigie ne peut pas télécharger le DCE tout seul.","ko");
@@ -398,7 +398,7 @@ async function preparerEnLigne(m,od){
     return;
   }
   let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
-  if(!atx) atx=atexoParRecherche(m);
+  if(!atx) atx=atexoParRecherche(m); else atx=avecContexte(atx,m);
   const params={};
   if(atx&&atx.dceAuto){ try{ new URL(atx.dceAuto).searchParams.forEach((v,k)=>{ if(k!=="quoi") params[k]=v; }); }catch(e){} }
   const pc=!atx&&pageACode(m);

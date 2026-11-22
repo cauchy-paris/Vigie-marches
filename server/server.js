@@ -262,6 +262,27 @@ async function telechargerParCode(depart, reprise) {
 }
 
 // Parcours de retrait du DCE. `reprise` = { jeton, code } quand l'utilisateur vient de taper le CAPTCHA.
+// L'identifiant de l'avis ne mène à rien (consultation pas encore en ligne, retirée ou lien BOAMP faux)
+const RE_INTROUVABLE = /Aucune consultation trouv|acc[eè]s [àa] cette consultation n.est pas autoris/i;
+function erreurIntrouvable() {
+  const e = new Error("La plateforme ne montre pas cette consultation (« Aucune consultation trouvée ») : elle n'est peut-être pas encore en ligne, ou le lien de l'avis est faux");
+  e.introuvable = true; return e;
+}
+// Retrait par identifiant ; si la plateforme ne connaît pas cet identifiant, on retrouve la consultation
+// par la référence / l'intitulé / la date limite de l'avis, puis on retente.
+async function telechargerAvecRepli(base, id, org, ctx) {
+  try { return await telechargerDce(base, id, org); }
+  catch (e) {
+    if (!e.introuvable || !ctx || !(ctx.ref || ctx.objet)) throw e;
+    const t = await trouverConsultation(base, ctx.ref, ctx.objet, ctx.limite, ctx.acheteur).catch(() => null);
+    if (!t || (String(t.id) === String(id) && t.org === org)) { e.lienRecherche = lienRecherche(base, ctx.ref, ctx.objet); throw e; }
+    console.log(new Date().toISOString(), "REPLI", base, id, org, "->", t.id, t.org);
+    const rep = await telechargerDce(base, t.id, t.org);
+    rep.consultation = { base, id: t.id, org: t.org };
+    return rep;
+  }
+}
+
 async function telechargerDce(origine, id, org, reprise) {
   let etat, code = null;
   if (reprise) {
@@ -278,6 +299,7 @@ async function telechargerDce(origine, id, org, reprise) {
     const { rep, url } = await requete(urlDemande, jar);
     const html = await rep.text();
     if (TRACE) TRACE.push({ etape: 1, titre: (html.match(/<title>([^<]*)/i) || [])[1], champs: champs(html).filter(c => c.type !== "hidden" || /PRADO/.test(c.name || "")).map(c => [c.type, c.name, c.id, (c.value || "").slice(0, 80)]).slice(0, 60) });
+    if (RE_INTROUVABLE.test(html) && !/choixAnonyme/i.test(html)) throw erreurIntrouvable();
     if (!/PRADO_PAGESTATE/.test(html)) throw new Error("Page de retrait du DCE introuvable");
     etat = { jar, url, html, etape: 2 };
   }
@@ -581,7 +603,9 @@ async function routeOneDrive(req, res, u) {
     if (!/^\d{1,10}$/.test(id) || !/^[a-z0-9]{1,12}$/i.test(org)) { r.dce = "introuvable"; r.lienDce = lienRecherche(base.origin, String(c.reference || "").slice(0, 80), String(c.objet || "").slice(0, 300)); return json(res, 200, r, autorise); }
     r.lienConsultation = base.origin + "/entreprise/consultation/" + id + "?orgAcronyme=" + org;
     let rep;
-    try { rep = await telechargerDce(base.origin, id, org, reprise); } catch (e) { r.dce = e.captcha ? "captcha" : e.robot ? "robot" : "echec"; r.message = e.message; if (e.captcha) r.captcha = e.captcha; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
+    try { rep = reprise ? await telechargerDce(base.origin, id, org, reprise) : await telechargerAvecRepli(base.origin, id, org, { ref: String(c.reference || "").slice(0, 80), objet: String(c.objet || "").slice(0, 300), limite: String(c.limite || "").slice(0, 25), acheteur: String(c.acheteur || "").slice(0, 120) }); }
+    catch (e) { r.dce = e.captcha ? "captcha" : e.robot ? "robot" : e.introuvable ? "introuvable" : "echec"; r.message = e.message; if (e.captcha) r.captcha = e.captcha; r.lienDce = e.lienRecherche || base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
+    if (rep.consultation && rep.consultation.id && String(rep.consultation.id) !== String(id)) { id = rep.consultation.id; org = rep.consultation.org; r.lienConsultation = base.origin + "/entreprise/consultation/" + id + "?orgAcronyme=" + org; }
     const taille = Number(rep.headers.get("content-length") || 0);
     if (taille > 300e6) { try { await rep.body.cancel(); } catch (e) {} r.dce = "trop_gros"; r.lienDce = base.origin + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org; return json(res, 200, r, autorise); }
     const buf = Buffer.from(await rep.arrayBuffer());
@@ -941,12 +965,12 @@ http.createServer(async (req, res) => {
   if (quoi === "consultation") { res.writeHead(302, { Location: base + "/entreprise/consultation/" + id + "?orgAcronyme=" + org }); return res.end(); }
 
   try {
-    const rep = await telechargerDce(base, id, org);
-    await envoyerFichier(res, rep, id);
-    console.log(new Date().toISOString(), "DCE OK", hote, id, org);
+    const rep = await telechargerAvecRepli(base, id, org, { ref, objet, limite, acheteur: (u.searchParams.get("acheteur") || "").slice(0, 120) });
+    await envoyerFichier(res, rep, rep.consultation.id || id);
+    console.log(new Date().toISOString(), "DCE OK", hote, rep.consultation.id, rep.consultation.org);
   } catch (e) {
     console.log(new Date().toISOString(), "DCE ECHEC", hote, id, org, e.message);
-    if (!res.headersSent) echecDce(req, res, e, page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org);
+    if (!res.headersSent) echecDce(req, res, e, e.lienRecherche || page + "EntrepriseDemandeTelechargementDce&id=" + id + "&orgAcronyme=" + org);
     else res.end();
   }
 }).listen(PORT, () => console.log("Serveur DCE sur le port " + PORT));

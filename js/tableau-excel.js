@@ -45,7 +45,7 @@ function dateTexte(t,annee){ // « 25/11/2026 » ou « 25/11 »
   return dateExcel(+(m[3]||annee),+m[2],+m[1]);
 }
 
-function atxDe(m){ let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; } return atx||atexoParRecherche(m); }
+function atxDe(m){ let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; } return atx?avecContexte(atx,m):atexoParRecherche(m); }
 // Lecture du RC (gratuite, par règles) pour remplir la ligne ; réutilise l'analyse déjà faite si elle est assez récente
 async function analysePourTableau(m){
   const cache=lire(CLE_ANALYSES,{})[m.idweb];
