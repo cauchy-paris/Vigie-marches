@@ -1,0 +1,33 @@
+# Tests automatiques de Vigie Marchés : lancés à chaque push et sur chaque demande de fusion (PR).
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Dépendances du serveur
+        run: npm ci --omit=dev
+        working-directory: server
+      - name: Tests du serveur (comptes, sécurité, lecture du RC et des mails)
+        run: npm run test:serveur
+      - name: Dépendances des tests du site
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Tests du site (navigateur)
+        run: npm run test:site
+      - name: Rapport des tests du site en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapport-tests-site
+          path: playwright-report/
+          retention-days: 7
