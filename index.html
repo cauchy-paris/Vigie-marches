@@ -346,7 +346,7 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .pastille-l{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:-8px}
 .pastille-l.dep{background:var(--bleu)}.pastille-l.gagne{background:var(--rouge)}
 .tip{position:absolute;top:0;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);font-size:12px;padding:5px 8px;border-radius:6px;white-space:nowrap;pointer-events:none}
-.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-weight:500;z-index:50}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--bleu-fonce);color:var(--blanc);padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-weight:500;z-index:1100;max-width:calc(100vw - 32px)}
 @media (prefers-reduced-motion:no-preference){.carte{animation:entre .25s ease-out both}@keyframes entre{from{transform:translateY(4px);opacity:.6}to{transform:none;opacity:1}}}
 </style>
 </head>
@@ -1377,17 +1377,40 @@ async function majMs(){
   majBoutonOd();
 }
 // Lien de partage OneDrive -> identifiants du dossier (API Graph « shares »)
+// Dossier d'un site SharePoint (…sharepoint.com/:f:/s/… ou /sites/…) : il faut l'autorisation « Files.ReadWrite.All »
+// (fichiers auxquels l'utilisateur a accès), « Files.ReadWrite » ne couvrant que son propre OneDrive.
+const MS_SCOPES_SITES=["Files.ReadWrite.All","User.Read"];
+function scopesDossier(od){ od=od===undefined?lire(CLE_OD,null):od; return od&&od.sites?MS_SCOPES_SITES:MS_SCOPES; }
+function lienDeSite(lien){ return /^https:\/\/[^/]*\.sharepoint\.com\//i.test(lien)&&!/^https:\/\/[^/]*-my\.sharepoint\.com\//i.test(lien); }
+// Renvoie true si le dossier est enregistré ; sinon lève une erreur dont le message dit pourquoi.
 async function enregistrerLienOd(lienDonne){
   const lien=(lienDonne!=null?lienDonne:$("#lienOd").value).trim();
-  if(!/^https:\/\/[^/]*(sharepoint\.com|onedrive\.live\.com|1drv\.ms)\//i.test(lien)){ toast("Collez le lien de partage du dossier OneDrive"); return; }
-  if(!msCompte()&&!await msConnecter()) return;
-  const jeton=await msJeton(true); if(!jeton) return;
+  if(!lien) throw new Error("Collez d'abord le lien de partage du dossier.");
+  if(!/^https:\/\/[^/]*(sharepoint\.com|onedrive\.live\.com|1drv\.ms)\//i.test(lien)) throw new Error("Ce lien n'est pas un lien OneDrive ou SharePoint (il doit commencer par https:// et contenir sharepoint.com, onedrive.live.com ou 1drv.ms).");
+  if(!msCompte()&&!await msConnecter()) throw new Error("Connectez d'abord votre compte Microsoft.");
   const id="u!"+btoa(unescape(encodeURIComponent(lien))).replace(/=+$/,"").replace(/\//g,"_").replace(/\+/g,"-");
-  const rep=await fetch("https://graph.microsoft.com/v1.0/shares/"+id+"/driveItem?$select=id,name,folder,parentReference,webUrl",{headers:{Authorization:"Bearer "+jeton}});
-  const j=await rep.json().catch(()=>({}));
-  if(!rep.ok||!j.folder){ toast(rep.ok?"Ce lien ne pointe pas vers un dossier":"Dossier inaccessible : "+((j.error&&j.error.message)||rep.status)); return; }
-  ecrire(CLE_OD,{lien,driveId:j.parentReference.driveId,id:j.id,nom:j.name,webUrl:j.webUrl});
-  $("#lienOd").value=lien; majMs(); toast("Dossier OneDrive enregistré"); return true;
+  const essai=async scopes=>{
+    const jeton=await msJeton(true,scopes);
+    if(!jeton) throw new Error("Microsoft n'a pas donné l'autorisation d'accéder aux fichiers"+(scopes===MS_SCOPES_SITES?" des sites SharePoint":"")+". Si une fenêtre Microsoft s'est ouverte, acceptez-la puis cliquez de nouveau « Enregistrer ce dossier ».");
+    const rep=await fetch("https://graph.microsoft.com/v1.0/shares/"+id+"/driveItem?$select=id,name,folder,parentReference,webUrl",{headers:{Authorization:"Bearer "+jeton,Prefer:"redeemSharingLinkIfNecessary"}});
+    return { rep, j:await rep.json().catch(()=>({})) };
+  };
+  let sites=lienDeSite(lien), r=await essai(sites?MS_SCOPES_SITES:MS_SCOPES);
+  // lien d'un dossier partagé par quelqu'un d'autre : on retente avec l'accès aux fichiers partagés
+  if(!r.rep.ok&&!sites&&[401,403,404].includes(r.rep.status)){ sites=true; r=await essai(MS_SCOPES_SITES); }
+  const {rep,j}=r;
+  if(!rep.ok){
+    const code=(j.error&&j.error.code)||"", detail=(j.error&&j.error.message)||"";
+    const c=msCompte(), qui=c?(c.username||c.name):"le compte connecté";
+    if(rep.status===403||/accessDenied/i.test(code)) throw new Error("Accès refusé : "+qui+" n'a pas accès à ce dossier. Vérifiez que le lien est partagé avec ce compte (ou « personnes de votre organisation »)."+(detail?" ("+detail+")":""));
+    if(rep.status===404||/itemNotFound/i.test(code)) throw new Error("Dossier introuvable avec ce lien. Recopiez le lien depuis SharePoint ou OneDrive (Partager › Copier le lien) et vérifiez qu'il n'a pas expiré.");
+    if(rep.status===401) throw new Error("Connexion Microsoft expirée : cliquez « Se déconnecter de Microsoft », reconnectez-vous puis réessayez.");
+    throw new Error("Microsoft a refusé ce lien ("+rep.status+(detail?" : "+detail:"")+").");
+  }
+  if(!j.folder) throw new Error("Ce lien pointe vers un fichier, pas vers un dossier. Partagez le dossier lui-même.");
+  ecrire(CLE_OD,{lien,driveId:j.parentReference.driveId,id:j.id,nom:j.name,webUrl:j.webUrl,sites:sites||undefined});
+  if($("#lienOd")) $("#lienOd").value=lien;
+  majMs(); toast("Dossier « "+j.name+" » enregistré"); return j.name;
 }
 
 /* ---------- Fenêtre CAPTCHA ----------
@@ -1737,10 +1760,10 @@ async function rangerDceFichiers(m,fichiers){
   rangementEnCours=true;
   try{
     if(msConfigure()&&od&&(msCompte()||!FS_OK)){
-      const jeton=await msJeton(false);
+      const jeton=await msJeton(false,scopesDossier());
       if(!jeton){
         const l=J.ligne("La connexion Microsoft doit être renouvelée.","ko");
-        l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true)) rangerDceFichiers(m,fichiers); }},"Se reconnecter"));
+        l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true,scopesDossier())) rangerDceFichiers(m,fichiers); }},"Se reconnecter"));
         return;
       }
       const l=J.ligne("⏳ Dossier « "+nom+" »…");
@@ -1781,10 +1804,10 @@ async function rangerDceFichiers(m,fichiers){
 async function preparerEnLigne(m,od){
   const nom=nomDossier(m);
   const J=journal("Dossier de réponse (OneDrive)");
-  let jeton=await msJeton(false);
+  let jeton=await msJeton(false,scopesDossier());
   if(!jeton){
     const l=J.ligne("La connexion Microsoft doit être renouvelée.","ko");
-    l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true)) preparerDossier(m); }},"Se reconnecter"));
+    l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true,scopesDossier())) preparerDossier(m); }},"Se reconnecter"));
     return;
   }
   let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
@@ -1923,7 +1946,7 @@ function modeEnLigne(){ const od=lire(CLE_OD,null); return msConfigure()&&od&&(m
 async function accesTableau(interactif){
   const od=modeEnLigne();
   if(od){
-    const jeton=await msJeton(interactif); if(!jeton) return null;
+    const jeton=await msJeton(interactif,scopesDossier()); if(!jeton) return null;
     const G="https://graph.microsoft.com/v1.0/drives/"+encodeURIComponent(od.driveId), H={Authorization:"Bearer "+jeton};
     const item=id=>G+"/items/"+encodeURIComponent(id);
     const fichier=item(od.id)+":/"+encodeURIComponent(NOM_EXCEL)+":/content";
@@ -2508,7 +2531,12 @@ function ouvrirOneDrive(){
     localStorage.removeItem(CLE_OD);
     location.reload();
   };
-  bLien.onclick=async()=>{ bLien.disabled=true; try{ if(await enregistrerLienOd(lien.value)) maj(); }catch(e){ toast(e.message); } finally{ bLien.disabled=false; } };
+  bLien.onclick=async()=>{
+    bLien.disabled=true; etatDossier.className="pn-etat"; etatDossier.textContent="Vérification du dossier auprès de Microsoft…";
+    try{ const nom=await enregistrerLienOd(lien.value); await maj(); etatDossier.className="pn-etat ok"; etatDossier.textContent="✓ Dossier accepté : « "+nom+" ». Les dossiers des consultations y seront créés."; }
+    catch(e){ etatDossier.className="pn-etat ko"; etatDossier.textContent="✗ Dossier refusé : "+e.message; }
+    finally{ bLien.disabled=false; }
+  };
   lien.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); bLien.click(); } });
   bPc.onclick=async()=>{ try{ await dossierRacine(true); toast("Dossier du PC enregistré"); maj(); }catch(e){} };
   const boite=el("div",{class:"captcha panneau",role:"dialog","aria-modal":"true","aria-label":"Connecter mon drive"},
