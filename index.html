@@ -195,7 +195,8 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .manuels-tete{font:700 13px/1.3 var(--f-titre);color:var(--bleu);text-transform:uppercase;letter-spacing:.05em;padding:4px 2px}
 .manuels-tete small{display:block;text-transform:none;letter-spacing:0;font:400 12.5px var(--f-texte);color:var(--gris)}
 .badge.manuel{background:var(--rouge);color:var(--blanc)}
-.badge.dce-ok{background:#14603a;color:#fff}
+.btn.dossier-ko{background:var(--rouge);border-color:var(--rouge);color:var(--blanc)}
+.btn.dossier-ok{background:#14603a;border-color:#14603a;color:var(--blanc)}
 /* Annonces du jour : rappels J-7 / J-2, résumé du matin, modifications */
 .annonces{max-width:1400px;margin:0 auto;padding:14px 20px 0;display:grid;gap:10px}
 .annonces:empty{display:none}
@@ -1059,7 +1060,6 @@ function carte(m){
   { const ch=changementsDe(m.idweb); if(ch.length) badges.append(el("span",{class:"badge modifie",title:ch.map(x=>"• "+x.type+" ("+new Date(x.date).toLocaleDateString("fr-FR")+") : "+x.texte).join("\n"),text:"⚠ "+(ch.some(x=>!x.lu)?"Modifié":"Modifié (vu)")})); }
   m.types.forEach(t=>badges.append(el("span",{class:"badge "+t.toLowerCase(),text:t.charAt(0)+t.slice(1).toLowerCase()})));
   if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
-  if(statuts[m.idweb]&&statuts[m.idweb].dce) badges.append(pastilleDce(statuts[m.idweb].dce));
   const plat=plateformeDe(m.urlDocs||m.urlDepot||m.urlProfil);
   if(plat) badges.append(el("span",{class:"badge plateforme",title:plat.compte||"",text:"DCE sur "+plat.nom}));
   const pert=notePertinence(m);
@@ -1133,7 +1133,7 @@ function carte(m){
     docs.append(el("button",{class:"btn",type:"button",title:"Corriger ou compléter les informations de ce marché",onclick:()=>ouvrirAjout(manuels[m.idweb]||m)},"✎ Modifier"));
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
-  if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"),boutonRangerDce(m));
+  if(st==="reponse") docs.append(boutonDossier(m),boutonRangerDce(m));
   if(st==="reponse") deposeSurCarte(c,m);
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
@@ -1642,18 +1642,25 @@ async function preparerDossier(m){
   }finally{ preparationEnCours=false; }
 }
 
-/* Pastille « DCE rangé » : posée quand le DCE est bien dans le dossier de réponse (OneDrive ou PC).
-   Gardée dans le statut du marché, donc synchronisée entre appareils. */
-function pastilleDce(d){
-  let quand=""; try{ quand=new Date(d.date).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}); }catch(e){}
-  return el("span",{class:"badge dce-ok",title:"DCE rangé dans le dossier de réponse"+(d.lieu?" ("+d.lieu+")":"")+(d.fichiers?", "+d.fichiers+" fichier"+(d.fichiers>1?"s":""):"")+(quand?", le "+quand:""),text:"✓ DCE rangé"});
+/* Bouton « 📁 Dossier de réponse » : rouge tant que le DCE n'est pas dans le dossier, vert quand le dossier
+   est créé et que le DCE s'y trouve. L'état est gardé dans le statut du marché, donc synchronisé entre appareils. */
+function etatDossier(b,d){
+  let quand=""; try{ if(d) quand=new Date(d.date).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}); }catch(e){}
+  b.className="btn btn-dossier "+(d?"dossier-ok":"dossier-ko");
+  b.title=d?"Dossier créé, DCE rangé"+(d.lieu?" dans "+d.lieu:"")+(d.fichiers?" ("+d.fichiers+" fichier"+(d.fichiers>1?"s":"")+")":"")+(quand?" le "+quand:"")+". Cliquer pour le recréer ou y redéposer le DCE.":"DCE pas encore dans le dossier de réponse : cliquer pour créer le dossier et y déposer le DCE dézippé";
+}
+function boutonDossier(m){
+  const b=el("button",{type:"button",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse");
+  b.dataset.dossier=m.idweb;
+  etatDossier(b,statuts[m.idweb]&&statuts[m.idweb].dce);
+  return b;
 }
 function marquerDce(m,fichiers,lieu){
   if(!m||!m.idweb) return;
   if(!statuts[m.idweb]) statuts[m.idweb]={statut:"reponse",date:new Date().toISOString(),m:snapshot(m)};
   statuts[m.idweb].dce={date:new Date().toISOString(),fichiers:fichiers||0,lieu:lieu||""};
   ecrire(CLE_STATUTS,statuts);
-  document.querySelectorAll('.carte[data-id="'+CSS.escape(m.idweb)+'"] .badges').forEach(b=>{ b.querySelectorAll(".dce-ok").forEach(x=>x.remove()); b.prepend(pastilleDce(statuts[m.idweb].dce)); });
+  document.querySelectorAll('button[data-dossier="'+CSS.escape(m.idweb)+'"]').forEach(b=>etatDossier(b,statuts[m.idweb].dce));
 }
 // Écrit le DCE (zip dézippé dans DCE/, sinon fichier tel quel) dans le dossier de réponse du PC
 async function ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,dansDce){
