@@ -38,7 +38,7 @@ function init(){
   majBlocTableau();
   // à l'ouverture : relecture du tableau Excel (décisions « Je ne réponds pas »), sans rien demander
   setTimeout(()=>{ (msConfigure()?msInit().catch(()=>{}):Promise.resolve()).then(()=>synchroTableau(false)); },1500);
-  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto(); initModifs(); initBord();
+  afficherSources(); majCompteSuivis(); initDecp(); initRappels(); initImportAuto(); initModifs(); initBord(); initEquipe();
   rechercher(0);
 }
 if(window.opener&&window.opener!==window&&/[#&?](code|error)=/.test(location.hash+location.search)){ document.body.innerHTML="<p style='font:16px system-ui;padding:24px'>Connexion en cours…</p>"; }

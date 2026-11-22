@@ -31,7 +31,7 @@ function preparer({ societes: ls, comptes: lc }) {
   const ids = new Set(socs.map(x => x.id));
   let principale = null;
   const cpts = lc.map(c0 => {
-    const c = { ...c0, e: String(c0.e).toLowerCase(), r: ROLES.has(c0.r) ? c0.r : "utilisateur", v: Number(c0.v) || 1 };
+    const c = { ...c0, e: String(c0.e).toLowerCase(), n: String(c0.n || c0.e), r: ROLES.has(c0.r) ? c0.r : "utilisateur", v: Number(c0.v) || 1 };
     if (!c.s || !ids.has(c.s)) {
       if (!principale) { principale = { id: nouvelId(), nom: "Société principale", places: null, actif: true, c: aujourdhui() }; socs.push(principale); ids.add(principale.id); }
       c.s = principale.id;
@@ -391,4 +391,9 @@ async function routes(req, res, u, { json, lireCorps, ip }) {
   return json(res, 404, { message: "Introuvable" });
 }
 
-module.exports = { routeCompte, compteDe, dechiffrer, comptesPrets, pret, preparer };
+// pour le travail d'équipe (server/equipe.js)
+const membresSociete = id => membres(id).map(c => ({ email: c.e, nom: c.n, role: c.r }));
+const baseDeDonnees = () => (enBase() ? stock.pool : null);
+const nomDe = email => { const c = comptes.get(email); return c ? c.n : email; };
+
+module.exports = { routeCompte, compteDe, dechiffrer, comptesPrets, pret, preparer, membresSociete, baseDeDonnees, nomDe };

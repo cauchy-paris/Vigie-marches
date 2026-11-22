@@ -4,6 +4,16 @@
 function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi,siretAcheteur}=m; return {siretAcheteur,manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
+  // travail d'équipe : un marché « J'y réponds » n'est pris que par un collaborateur de la société
+  if(k==="reponse"&&actuel!=="reponse"&&equipeVisible()){
+    if(!equipePeutPrendre(m)) return;
+    equipePrendre(m).then(ok=>{ if(ok) appliquerStatut(m,k,actuel); });
+    return;
+  }
+  if(actuel==="reponse"&&equipeVisible()) equipeLiberer(m.idweb);
+  appliquerStatut(m,k,actuel);
+}
+function appliquerStatut(m,k,actuel){
   if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
   else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m),...(statuts[m.idweb]&&statuts[m.idweb].dce?{dce:statuts[m.idweb].dce}:{})}; toast("« "+LIB_STATUT[k]+" » enregistré"); if(k==="reponse") preparerDossier(m).finally(()=>synchroTableau(false)); }
   if(!ecrire(CLE_STATUTS,statuts)) toast("Attention : ce navigateur bloque l'enregistrement local");

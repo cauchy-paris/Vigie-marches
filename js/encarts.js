@@ -35,6 +35,7 @@ function el(tag,attrs={},...enfants){
 function carte(m){
   const st=statuts[m.idweb]&&statuts[m.idweb].statut;
   const c=el("article",{class:"carte"+(st?" statut-"+st:""),"data-id":m.idweb});
+  c._m=m;
 
   // Badges
   const badges=el("div",{class:"badges"});
@@ -45,6 +46,7 @@ function carte(m){
   if(m.nature&&m.nature!=="Avis de marché") badges.append(el("span",{class:"badge",text:m.nature}));
   const plat=plateformeDe(m.urlDocs||m.urlDepot||m.urlProfil);
   if(plat) badges.append(el("span",{class:"badge plateforme",title:plat.compte||"",text:"DCE sur "+plat.nom}));
+  { const be=badgeEquipe(m); if(be) badges.prepend(be); }
   const pert=notePertinence(m);
 
   // Échéance
@@ -116,7 +118,8 @@ function carte(m){
     docs.append(el("button",{class:"btn",type:"button",title:"Corriger ou compléter les informations de ce marché",onclick:()=>ouvrirAjout(manuels[m.idweb]||m)},"✎ Modifier"));
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
-  if(st==="reponse") docs.append(boutonDossier(m));
+  if(st==="reponse") docs.append(boutonDossier(m),boutonOffreDeposee(m));
+  { const at=attributionEquipe(m); if(at) docs.append(at); }
   if(st==="reponse") deposeSurCarte(c,m);
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));

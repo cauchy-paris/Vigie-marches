@@ -19,7 +19,8 @@ const COLS=[
   {k:"dateVisite",titre:"Date de visite",l:13,date:1},{k:"ponderation",titre:"Pondération de notation",l:42},
   {k:"limite",titre:"Date limite de remise",l:16,date:2},{k:"decision",titre:"Décision",l:19},
   {k:"dossier",titre:"Dossier",l:44},{k:"ref",titre:"Réf. BOAMP",l:11},
-  {k:"resultat",titre:"Résultat",l:16},{k:"montantOffre",titre:"Montant de l'offre (€ HT)",l:16}
+  {k:"resultat",titre:"Résultat",l:16},{k:"montantOffre",titre:"Montant de l'offre (€ HT)",l:16},
+  {k:"collab",titre:"Collaborateur désigné",l:22}
 ];
 const estNePasRepondre=v=>/ne\s*repon/.test(sansAccent(String(v||"")));
 const CLE_TABLEAU="vigie.tableau.v1";
@@ -83,6 +84,7 @@ async function ligneTableau(m,od){
   const res=resultats[m.idweb];
   L.resultat=ETAPES[(res&&res.etape)||"prepa"];
   if(res&&res.montant) L.montantOffre=res.montant;
+  L.collab=collaborateurDe(m.idweb);
   return {L,notes};
 }
 
@@ -218,7 +220,7 @@ async function synchroTableau(interactif){
     if(!ws){ ws=feuilleNeuve(wb); cree=true; }
     let C=colonnes(ws);
     // colonnes ajoutées depuis (Résultat, Montant de l'offre) : créées au bout du tableau existant
-    for(const k of ["resultat","montantOffre"]) if(!C[k]){
+    for(const k of ["resultat","montantOffre","collab"]) if(!C[k]){
       const col=COLS.find(x=>x.k===k), n=ws.getRow(1).cellCount+1, h=ws.getCell(1,n);
       h.value=col.titre; h.font={bold:true,color:{argb:"FFFFFFFF"}}; h.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF16337A"}}; h.alignment={vertical:"middle",horizontal:"center",wrapText:true};
       ws.getColumn(n).width=col.l; C=colonnes(ws); colAjoutee=true;
@@ -266,6 +268,11 @@ async function synchroTableau(interactif){
         const sm=statuts[ref]&&statuts[ref].m;
         majResultat(ref,{...(et?{etape:et}:{}),...(mt?{montant:mt}:{}),m:(res&&res.m)||(sm?resumeMarche(sm):{objet:C.nom?ws.getCell(i,C.nom).text:ref,acheteur:C.acheteur?ws.getCell(i,C.acheteur).text:""})},false);
       }
+    }
+    // 4. Collaborateur désigné (travail d'équipe) : toujours celui du moment
+    if(C.collab) for(const [ref,i] of lignes){
+      const nom=collaborateurDe(ref), c=ws.getCell(i,C.collab);
+      if(nom&&c.text!==nom){ c.value=nom; c.alignment={vertical:"top",wrapText:true}; modifie=true; }
     }
     for(let r=2,fin=Math.max(ws.rowCount+100,300);C.resultat&&r<=fin;r++){ const c=ws.getCell(r,C.resultat); if(!c.dataValidation||c.dataValidation.type!=="list") c.dataValidation={type:"list",allowBlank:true,formulae:['"'+Object.values(ETAPES).join(",")+'"']}; }
     if(modifie){
