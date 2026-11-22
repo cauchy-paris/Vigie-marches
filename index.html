@@ -1133,7 +1133,7 @@ function carte(m){
     docs.append(el("button",{class:"btn",type:"button",title:"Corriger ou compléter les informations de ce marché",onclick:()=>ouvrirAjout(manuels[m.idweb]||m)},"✎ Modifier"));
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
-  if(st==="reponse") docs.append(boutonDossier(m),boutonRangerDce(m));
+  if(st==="reponse") docs.append(boutonDossier(m));
   if(st==="reponse") deposeSurCarte(c,m);
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
