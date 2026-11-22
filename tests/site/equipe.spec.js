@@ -74,18 +74,24 @@ test("pas de doublon, attribution par l'administratrice, offre déposée, récap
   await chef.click('.onglet[data-vue="bord"]');
   const bloc = chef.locator(".encadre:has(h2:has-text('Équipe'))");
   await expect(bloc.locator("tr:has-text('Marc')").first()).toContainText("1");
-  await expect(bloc.locator("select[aria-label='Collaborateur désigné']")).toHaveValue("marc@a.fr");
+  await expect(bloc.locator('select[aria-label="Responsable de l\'offre"]')).toHaveValue("marc@a.fr");
 
   // Marc reçoit le marché dans « Mes marchés » et dépose l'offre
   await marc.reload();
   await expect(carte(marc).locator(".badge.equipe")).toHaveText("👤 Vous");
   await expect(marc.locator("#nbSuivis")).toHaveText("1");
   await carte(marc).locator("button:has-text('Offre déposée')").click();
-  await expect(carte(marc).locator(".badge.equipe")).toHaveText("👤 Vous · Déposée");
+  await expect(carte(marc).locator(".badge.equipe")).toContainText("👤 Vous · Déposée le ");
+  await expect(carte(marc).locator(".responsable")).toContainText("Responsable de l'offre");
+  await expect(carte(marc).locator(".responsable-nom")).toHaveText("Marc (vous)");
+  await expect(carte(marc).locator(".date-depot input")).toBeVisible();
+  await carte(marc).locator(".date-depot input").fill("2026-11-20");
+  await carte(marc).locator(".date-depot input").dispatchEvent("change");
+  await expect(carte(marc).locator(".badge.equipe")).toHaveText("👤 Vous · Déposée le 20/11/2026");
 
   // Léa voit que c'est Marc maintenant ; l'administratrice voit l'offre déposée
   await lea.reload();
-  await expect(carte(lea).locator(".badge.equipe")).toHaveText("👤 Marc · Déposée");
+  await expect(carte(lea).locator(".badge.equipe")).toHaveText("👤 Marc · Déposée le 20/11/2026");
   await chef.reload();
   await chef.click('.onglet[data-vue="bord"]');
   const ligneMarc = chef.locator(".encadre:has(h2:has-text('Équipe')) tbody tr:has-text('Marc')").first();
@@ -101,5 +107,9 @@ test("pas de doublon, attribution par l'administratrice, offre déposée, récap
   expect(ws.getRow(2).getCell(1).text).toBe("Travaux de rénovation des réseaux CVC du Palais");
   expect(ws.getRow(2).getCell(4).text).toBe("Marc");
   expect(ws.getRow(2).getCell(5).text).toBe("Déposée");
+  expect(ws.getRow(1).getCell(6).text).toBe("Date de dépôt");
+  const depot = ws.getRow(2).getCell(6);
+  expect(depot.value instanceof Date && depot.value.toISOString().slice(0, 10)).toBe("2026-11-20");
+  expect(depot.numFmt).toBe("dd/mm/yyyy");
   expect(erreurs).toEqual([]);
 });
