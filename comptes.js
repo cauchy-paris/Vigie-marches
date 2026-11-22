@@ -312,9 +312,48 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     majBouton();
   }
 
+  /* ---------- un espace par compte Vigie sur un même navigateur ----------
+     Quand un autre compte se connecte sur cet appareil, les données du compte précédent
+     (marchés, statuts, drive, boîte mail, connexion Microsoft, dossier du PC) sont mises de côté
+     dans IndexedDB et le nouveau compte démarre vierge ; elles reviennent quand ce compte se reconnecte. */
+  const PROPRIO = "vigie.proprietaire.v1";
+  const GARDEES = new Set([CLE, PROPRIO]);
+  const estDuCompte = k => (/^vigie\./.test(k) && !GARDEES.has(k))
+    || /^msal\.|login\.(windows\.net|microsoftonline\.com)|6b6c5506-bb5e-48d4-a594-eca34bf48837/i.test(k);
+  function idb() { return new Promise((ok, ko) => { const r = indexedDB.open("vigie", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); }
+  async function idbFaire(mode, f) { const db = await idb(); return new Promise((ok, ko) => { const t = db.transaction("kv", mode); const s = t.objectStore("kv"); let res; const r = f(s); if (r) r.onsuccess = () => { res = r.result; }; t.oncomplete = () => ok(res); t.onerror = () => ko(t.error); }); }
+  async function basculerCompte(email) {
+    const ls = window.localStorage;
+    let proprio = ls.getItem(PROPRIO);
+    if (!proprio) {
+      // première fois : les données présentes appartiennent au dernier compte synchronisé, sinon à celui qui se connecte
+      try { const m = JSON.parse(ls.getItem("vigie.synchro.v1") || "null"); proprio = (m && m.compte) || email; } catch (e) { proprio = email; }
+    }
+    if (proprio === email) { ls.setItem(PROPRIO, email); return false; }
+    // 1) mise de côté des données du compte précédent
+    const cles = []; for (let i = 0; i < ls.length; i++) { const k = ls.key(i); if (k && estDuCompte(k)) cles.push(k); }
+    const local = {}; cles.forEach(k => { local[k] = ls.getItem(k); });
+    let racine = null; try { racine = await idbFaire("readonly", s => s.get("racine")); } catch (e) {}
+    await idbFaire("readwrite", s => s.put({ local, racine: racine || null, le: new Date().toISOString() }, "espace:" + proprio));
+    cles.forEach(k => ls.removeItem(k));
+    try { await idbFaire("readwrite", s => s.delete("racine")); } catch (e) {}
+    // 2) retour des données de ce compte s'il s'est déjà servi de cet appareil
+    let espace = null; try { espace = await idbFaire("readonly", s => s.get("espace:" + email)); } catch (e) {}
+    if (espace) {
+      Object.entries(espace.local || {}).forEach(([k, v]) => { try { ls.setItem(k, v); } catch (e) {} });
+      if (espace.racine) { try { await idbFaire("readwrite", s => s.put(espace.racine, "racine")); } catch (e) {} }
+      try { await idbFaire("readwrite", s => s.delete("espace:" + email)); } catch (e) {}
+    }
+    ls.setItem(PROPRIO, email);
+    return true;
+  }
+
   /* ---------- démarrage ---------- */
   let suiteLancee = false;
-  function entrer(suite) {
+  async function entrer(suite) {
+    // l'appli a déjà lu les données au chargement : si elles appartenaient à un autre compte, on les range puis on recharge
+    try { if (await basculerCompte(String(session.compte.email || "").toLowerCase())) { location.reload(); return; } }
+    catch (e) { console.log("Espace du compte", e && e.message); }
     poserBouton();
     if (!suiteLancee) { suiteLancee = true; suite(); if (window.Synchro) window.Synchro.demarrer(session.compte.email); }
     if (session.compte.provisoire) changerMotDePasse(true);
