@@ -62,8 +62,8 @@ async function ouvrirBase(url, variable, preparer) {
       const cx = await pool.connect();
       try {
         await cx.query("begin");
-        for (const s of depart.societes) await cx.query("insert into vigie_societes (id, nom, places, actif, cree) values ($1,$2,$3,$4,$5) on conflict (id) do nothing", [s.id, s.nom, s.places, s.actif, s.c]);
-        for (const c of depart.comptes) await cx.query("insert into vigie_comptes (email, nom, role, societe, hachage, version, provisoire, cree) values ($1,$2,$3,$4,$5,$6,$7,$8) on conflict (email) do nothing", [c.e, c.n, c.r, c.s, c.h, c.v, !!c.t, c.c]);
+        for (const s of depart.societes) await cx.query("insert into vigie_societes (id, nom, places, actif, cree) values ($1,$2,$3,$4,coalesce($5::date, current_date)) on conflict (id) do nothing", [s.id, s.nom, s.places, s.actif, s.c || null]);
+        for (const c of depart.comptes) await cx.query("insert into vigie_comptes (email, nom, role, societe, hachage, version, provisoire, cree) values ($1,$2,$3,$4,$5,$6,$7,coalesce($8::date, current_date)) on conflict (email) do nothing", [c.e, c.n, c.r, c.s, c.h, c.v, !!c.t, c.c || null]);
         await cx.query("commit");
         console.log("Base de comptes : " + depart.comptes.length + " compte(s) et " + depart.societes.length + " société(s) recopiés depuis VIGIE_COMPTES");
       } catch (e) { await cx.query("rollback").catch(() => {}); throw e; } finally { cx.release(); }
@@ -97,6 +97,7 @@ async function ouvrirBase(url, variable, preparer) {
     },
     async copies() { return (await pool.query("select jour, le, jsonb_array_length(contenu->'comptes') as comptes from vigie_sauvegardes order by jour desc")).rows.map(l => ({ jour: jour(l.jour), le: l.le, comptes: l.comptes })); },
     async copie(j) { const r = await pool.query("select contenu from vigie_sauvegardes where jour = $1", [j]); return r.rows[0] ? r.rows[0].contenu : null; },
+    pool,
     fermer: () => pool.end(),
   };
 }
@@ -105,7 +106,7 @@ async function ouvrirBase(url, variable, preparer) {
 function ouvrirVariable(variable, preparer) {
   const lu = preparer(lireVariable(variable));
   const rien = async () => {};
-  return { mode: "variable", societes: lu.societes, comptes: lu.comptes, ecrireCompte: rien, ecrireSociete: rien, supprimerCompte: rien, supprimerSociete: rien, copieDuJour: rien, copies: async () => [], copie: async () => null, fermer: rien };
+  return { mode: "variable", societes: lu.societes, comptes: lu.comptes, ecrireCompte: rien, ecrireSociete: rien, supprimerCompte: rien, supprimerSociete: rien, copieDuJour: rien, copies: async () => [], copie: async () => null, pool: null, fermer: rien };
 }
 
 async function ouvrir(preparer) {

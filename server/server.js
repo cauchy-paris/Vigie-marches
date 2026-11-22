@@ -9,6 +9,7 @@ const onedrive = require("./onedrive");
 const { extraireFiche } = require("./fiche");
 const { lireAlertes } = require("./mail");
 const { routeCompte, compteDe, dechiffrer, comptesPrets } = require("./comptes");
+const { routeEquipe } = require("./equipe");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -841,6 +842,7 @@ http.createServer(async (req, res) => {
     }
     if (u.pathname === "/diagnostic" && req.compte.r !== "admin") return json(res, 403, { message: "Réservé à l'administrateur." });
   }
+  if (u.pathname.startsWith("/equipe/")) return routeEquipe(req, res, u, { json, lireCorps }).catch(e => { console.log("equipe", e.stack); if (!res.headersSent) json(res, 500, { message: "Erreur interne" }); });
   if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });

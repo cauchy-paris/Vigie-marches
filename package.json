@@ -8,6 +8,7 @@
     "test:site": "playwright test"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0"
+    "@playwright/test": "1.63.0",
+    "exceljs": "^4.4.0"
   }
 }

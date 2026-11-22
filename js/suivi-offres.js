@@ -24,6 +24,7 @@ function majResultat(id,champs,sale=true){
   resultats[id]={...av,...champs,date:new Date().toISOString(),...(sale?{sale:true}:{})};
   if(champs.etape&&champs.etape!==av.etape) resultats[id]["d_"+champs.etape]=new Date().toISOString();
   sauverResultats();
+  equipeEtape(id,resultats[id]);
   if(!$("#vue-bord").hidden) afficherBord();
 }
 let minuterieRes;
@@ -81,6 +82,7 @@ function afficherBord(){
     tuile(taux==null?"–":taux+" %","Taux de réussite",taux==null?"dès le premier résultat connu":"gagnés sur résultats connus"),
     tuile(mGagne?euros(mGagne):"–","Montant gagné","somme des offres gagnées, HT"),
     tuile(moy?euros(moy):"–","Offre moyenne",avecMt.length?"sur "+avecMt.length+" offre"+(avecMt.length>1?"s":"")+" chiffrée"+(avecMt.length>1?"s":""):"saisissez le montant sur l'encart")));
+  { const be=blocEquipe(); if(be) cont.append(be); }
   // Graphique mensuel : offres déposées par mois (gagnées en rouge)
   cont.append(graphiqueMois(deposes));
   // Prochaines remises

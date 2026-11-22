@@ -100,3 +100,13 @@ test("note de pertinence selon le profil de l'entreprise", async ({ page }) => {
   expect(dans.score).toBeGreaterThanOrEqual(0);
   expect(dans.score).toBeLessThanOrEqual(100);
 });
+
+test("tableau Excel : colonne « Collaborateur désigné », remplie avec son propre nom hors équipe", async ({ page }) => {
+  const r = await page.evaluate(() => {
+    statuts["26-123456"] = { statut: "reponse", m: { idweb: "26-123456" } };
+    return { col: COLS.find(c => c.k === "collab"), nom: collaborateurDe("26-123456"), vide: collaborateurDe("inconnu") };
+  });
+  expect(r.col.titre).toBe("Collaborateur désigné");
+  expect(r.nom).toBe("Test");
+  expect(r.vide).toBe("");
+});
