@@ -8,7 +8,7 @@ const { textePdf, analyserTexte } = require("./regles");
 const onedrive = require("./onedrive");
 const { extraireFiche } = require("./fiche");
 const { lireAlertes } = require("./mail");
-const { routeCompte, compteDe } = require("./comptes");
+const { routeCompte, compteDe, dechiffrer } = require("./comptes");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -636,7 +636,10 @@ async function routeMailImap(req, res) {
   if (l.length > 10) return json(res, 429, { ok: false, message: "Trop de demandes en peu de temps, réessayez dans quelques minutes." }, autorise);
   let c; try { c = JSON.parse(await lireCorps(req, 10000)); } catch (e) { return json(res, 400, { ok: false, message: "Demande illisible" }, autorise); }
   const hote = String(c.hote || "").trim().toLowerCase(), port = Number(c.port || 993);
-  const utilisateur = String(c.utilisateur || "").trim(), motdepasse = String(c.motdepasse || "");
+  const utilisateur = String(c.utilisateur || "").trim();
+  // mot de passe saisi, sinon celui enregistré (chiffré) dans le compte Vigie de l'utilisateur
+  const motdepasse = String(c.motdepasse || "") || (c.motdepasseChiffre && req.compte ? dechiffrer(c.motdepasseChiffre, req.compte.e) || "" : "");
+  if (!c.motdepasse && c.motdepasseChiffre && !motdepasse) return json(res, 400, { ok: false, message: "Le mot de passe enregistré de la boîte mail n'est plus lisible : saisissez-le de nouveau dans « Importer les alertes mail »." }, autorise);
   const depuis = new Date(c.depuis || Date.now() - 14 * 864e5);
   if (!/^[a-z0-9.-]{3,120}$/.test(hote) || !IMAP_PORTS.has(port) || !utilisateur || !motdepasse || utilisateur.length > 200 || motdepasse.length > 200 || isNaN(depuis))
     return json(res, 400, { ok: false, message: "Paramètres de la boîte mail incomplets." }, autorise);
