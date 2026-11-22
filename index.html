@@ -271,6 +271,10 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .journal-lignes .ok{color:#14603a}
 .journal-lignes .ko{color:var(--rouge)}
 .journal .btn{justify-self:end}
+.etapes-dce{display:grid;gap:6px;margin-top:2px}
+.etapes-dce .btn{justify-self:stretch;text-align:center}
+.carte.depot-survol{outline:3px dashed var(--bleu);outline-offset:3px;background:#eef3ff}
+.ranger-dce{display:contents}
 .ref{font-family:var(--f-mono);font-size:12px;color:var(--gris)}
 
 .pagination{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap}
@@ -813,7 +817,7 @@ function analyserDonnees(brut){
     if(!t) return;
     const urls=t.match(URL_RE); if(!urls) return;
     for(let u of urls){
-      u=u.replace(/[.,;]+$/,"");
+      u=u.replace(/&amp;/g,"&").replace(/[.,;]+$/,"");
       if(URL_IGNOREES.test(u)) continue;
       if(/CallForTendersDocumentReference|DocConsul|URL_DOCUMENT|document|dce/i.test(p)) docs.push(u);
       else if(/EndpointID|TenderRecipient|PARTICIPATION|depot|Depot|soumission|remise/i.test(p)) depot.push(u);
@@ -1127,7 +1131,8 @@ function carte(m){
     docs.append(el("button",{class:"btn",type:"button",title:"Corriger ou compléter les informations de ce marché",onclick:()=>ouvrirAjout(manuels[m.idweb]||m)},"✎ Modifier"));
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
-  if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"));
+  if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"),boutonRangerDce(m));
+  if(st==="reponse") deposeSurCarte(c,m);
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
   if(st==="reponse"||resultats[m.idweb]) c.append(ligneSuiviOffre(m));
@@ -1529,7 +1534,7 @@ function fichiersRaccourci(m,liensDce,raison){
     (/AdvancedSearch/.test(lien)?'<p>La consultation n\'a pas été identifiée de façon certaine : le lien ouvre la recherche sur la plateforme, repérez-la par sa date limite.</p>':'')+
     liens.map(([t,u])=>'<a class="b" href="'+echap(u)+'" target="_blank" rel="noopener">'+echap(t)+'</a>').join("")+
     (pf&&pf.compte?'<p>'+echap(pf.compte)+'.</p>':'')+
-    '<p>Une fois le DCE téléchargé, enregistrez-le dans le dossier DCE de la consultation.</p></body></html>';
+    '<p>Une fois le DCE téléchargé, rangez-le avec le bouton « 📥 Ranger le DCE téléchargé » de l\'encart dans Vigie (il le dézippe dans le dossier DCE), ou enregistrez-le vous-même dans le dossier DCE de la consultation.</p></body></html>';
   return [{nom:"Télécharger le DCE.url",texte:url},{nom:"Télécharger le DCE.html",texte:html}];
 }
 async function deposerRaccourciLocal(dossier,m,liens,raison,J){
@@ -1572,9 +1577,9 @@ async function preparerDossier(m){
     let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
     if(!atx) atx=atexoParRecherche(m);
     if(!atx&&!extensionDispo()){
-      J.ligne("Le DCE de cette consultation ne peut pas être téléchargé automatiquement (plateforme sans retrait anonyme). L'extension Vigie permet de le récupérer avec votre compte.","ko");
+      J.ligne("Cette plateforme demande un code de vérification ou un compte : Vigie ne peut pas télécharger le DCE tout seul.","ko");
       const liens=await lienDirectDce(m,null);
-      J.ligne("").append(el("a",{href:liens.lien,target:"_blank",rel:"noopener"},"Ouvrir la consultation pour télécharger le DCE"));
+      etapesManuelles(J,m,liens.lien);
       await deposerRaccourciLocal(dossier,m,liens,"plateforme sans retrait anonyme",J);
       return;
     }
@@ -1583,52 +1588,134 @@ async function preparerDossier(m){
     let blob, nomFichier, type;
     if(parExt&&parExt.blob){ blob=parExt.blob; nomFichier=propre(parExt.nom)||"DCE.zip"; type=parExt.type||""; }
     else{
-      if(!atx){ const liens=await lienDirectDce(m,null); await deposerRaccourciLocal(dossier,m,liens,parExt&&parExt.telecharge?"DCE dans le dossier Téléchargements":"plateforme sans retrait anonyme",J); return; }
+      if(!atx){ const liens=await lienDirectDce(m,null); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,parExt&&parExt.telecharge?"DCE dans le dossier Téléchargements":"plateforme sans retrait anonyme",J); return; }
       // 2. par le serveur Vigie (retrait anonyme), avec CAPTCHA si besoin
       const l=J.ligne("⏳ Téléchargement du DCE… (jusqu'à une minute si le serveur était en veille)");
       let rep=null; try{ rep=await dceServeurAvecCaptcha(atx.dceAuto,J); }catch(e){}
       type=(rep&&rep.headers.get("content-type"))||"";
-      if(!rep||!rep.ok||/text\/html|json/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; J.ligne("").append(el("a",{href:atx.dceAuto,target:"_blank",rel:"noopener"},"Voir le détail et le lien de retrait")); await deposerRaccourciLocal(dossier,m,await lienDirectDce(m,atx),rep?"":"serveur injoignable",J); return; }
+      if(!rep||!rep.ok||/text\/html|json/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; const liens=await lienDirectDce(m,atx); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,rep?"":"serveur injoignable",J); return; }
       const cd=rep.headers.get("content-disposition")||"";
       nomFichier=decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i)||[])[1]||"")||(cd.match(/filename="?([^";]+)/i)||[])[1]||"DCE.zip";
       nomFichier=propre(nomFichier)||"DCE.zip";
       blob=await rep.blob();
       l.textContent="✓ DCE téléchargé ("+(blob.size/1048576).toFixed(1).replace(".",",")+" Mo)"; l.className="ok";
     }
-    const sansAcc=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7e]/g,"_");
-    const ecrireFichier=async(rep,chemin,donnees)=>{
-      const parts=chemin.split("/").map(propre).filter(Boolean); let d=rep;
-      for(const p of parts.slice(0,-1)){ try{ d=await d.getDirectoryHandle(p,{create:true}); }catch(e){ d=await d.getDirectoryHandle(sansAcc(p),{create:true}); } }
-      const nomF=parts[parts.length-1]||"fichier";
-      let f; try{ f=await d.getFileHandle(nomF,{create:true}); }catch(e){ f=await d.getFileHandle(sansAcc(nomF),{create:true}); }
-      const w=await f.createWritable(); await w.write(donnees); await w.close();
-    };
-    if(!/zip/i.test(type)&&!/\.zip$/i.test(nomFichier)){ await ecrireFichier(dossier,nomFichier,blob); J.ligne("✓ Fichier enregistré : "+nomFichier,"ok"); return; }
-    const l2=J.ligne("⏳ Décompression…");
-    const dceDir=await dossier.getDirectoryHandle("DCE",{create:true});
-    let n=0;
-    const deziper=async(donnees,cible,profondeur)=>{
-      const zip=await JSZip.loadAsync(donnees,{decodeFileName:nomZip});
-      for(const e of Object.values(zip.files)){
-        if(e.dir) continue;
-        const contenu=await e.async("uint8array");
-        if(/\.zip$/i.test(e.name)&&profondeur<2){
-          // archive dans l'archive : dézippée dans un dossier du même nom
-          const parts=e.name.split("/").map(propre).filter(Boolean); let d=cible;
-          for(const p of parts.slice(0,-1)) d=await d.getDirectoryHandle(p,{create:true});
-          const sous=await d.getDirectoryHandle(parts[parts.length-1].replace(/\.zip$/i,""),{create:true});
-          try{ await deziper(contenu,sous,profondeur+1); continue; }catch(err){}
-        }
-        await ecrireFichier(cible,e.name,contenu); n++;
-        if(n%10===0) l2.textContent="⏳ Décompression… "+n+" fichiers";
-      }
-    };
-    try{ await deziper(blob,dceDir,0); l2.textContent="✓ DCE dézippé : "+n+" fichiers dans « "+nom+"/DCE »"; l2.className="ok"; }
-    catch(e){ await ecrireFichier(dossier,nomFichier,blob); l2.textContent="Archive non lisible ("+(e.message||e)+"), le fichier « "+nomFichier+" » est enregistré tel quel."; l2.className="ko"; }
-    J.ligne("OneDrive va synchroniser le dossier automatiquement.");
+    await ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,false);
   }catch(e){
     J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
   }finally{ preparationEnCours=false; }
+}
+
+// Écrit le DCE (zip dézippé dans DCE/, sinon fichier tel quel) dans le dossier de réponse du PC
+async function ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,dansDce){
+  const sansAcc=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7e]/g,"_");
+  const ecrireFichier=async(rep,chemin,donnees)=>{
+    const parts=chemin.split("/").map(propre).filter(Boolean); let d=rep;
+    for(const p of parts.slice(0,-1)){ try{ d=await d.getDirectoryHandle(p,{create:true}); }catch(e){ d=await d.getDirectoryHandle(sansAcc(p),{create:true}); } }
+    const nomF=parts[parts.length-1]||"fichier";
+    let f; try{ f=await d.getFileHandle(nomF,{create:true}); }catch(e){ f=await d.getFileHandle(sansAcc(nomF),{create:true}); }
+    const w=await f.createWritable(); await w.write(donnees); await w.close();
+  };
+  if(!/zip/i.test(type)&&!/\.zip$/i.test(nomFichier)){ await ecrireFichier(dansDce?await dossier.getDirectoryHandle("DCE",{create:true}):dossier,nomFichier,blob); J.ligne("✓ Fichier enregistré : "+(dansDce?"DCE/":"")+nomFichier,"ok"); return; }
+  const l2=J.ligne("⏳ Décompression…");
+  const dceDir=await dossier.getDirectoryHandle("DCE",{create:true});
+  let n=0;
+  const deziper=async(donnees,cible,profondeur)=>{
+    const zip=await JSZip.loadAsync(donnees,{decodeFileName:nomZip});
+    for(const e of Object.values(zip.files)){
+      if(e.dir) continue;
+      const contenu=await e.async("uint8array");
+      if(/\.zip$/i.test(e.name)&&profondeur<2){
+        // archive dans l'archive : dézippée dans un dossier du même nom
+        const parts=e.name.split("/").map(propre).filter(Boolean); let d=cible;
+        for(const p of parts.slice(0,-1)) d=await d.getDirectoryHandle(p,{create:true});
+        const sous=await d.getDirectoryHandle(parts[parts.length-1].replace(/\.zip$/i,""),{create:true});
+        try{ await deziper(contenu,sous,profondeur+1); continue; }catch(err){}
+      }
+      await ecrireFichier(cible,e.name,contenu); n++;
+      if(n%10===0) l2.textContent="⏳ Décompression… "+n+" fichiers";
+    }
+  };
+  try{ await deziper(blob,dceDir,0); l2.textContent="✓ DCE dézippé : "+n+" fichiers dans « "+nom+"/DCE »"; l2.className="ok"; }
+  catch(e){ await ecrireFichier(dossier,nomFichier,blob); l2.textContent="Archive non lisible ("+(e.message||e)+"), le fichier « "+nomFichier+" » est enregistré tel quel."; l2.className="ko"; }
+  J.ligne("OneDrive va synchroniser le dossier automatiquement.");
+}
+
+/* ---------- DCE téléchargé à la main ----------
+   Quand la plateforme impose un code, une case « robot » ou un compte, l'utilisateur télécharge
+   le DCE lui-même (souvent un seul clic) puis le donne à Vigie (bouton ou glisser-déposer sur l'encart) :
+   Vigie le range et le dézippe dans le sous-dossier DCE du dossier de réponse. Marche aussi sur téléphone
+   en mode OneDrive en ligne (le fichier est choisi dans Téléchargements). */
+const TYPES_DCE=".zip,.pdf,.doc,.docx,.xls,.xlsx,.odt,.ods,.rar,.7z,application/zip,application/pdf";
+function boutonRangerDce(m,libelle){
+  const champ=el("input",{type:"file",multiple:true,accept:TYPES_DCE,hidden:true});
+  champ.onchange=()=>{ const f=[...champ.files]; champ.value=""; rangerDceFichiers(m,f); };
+  const b=el("button",{class:"btn btn-plein",type:"button",title:"Choisissez le DCE que vous venez de télécharger (dossier Téléchargements) : Vigie le range et le dézippe dans le dossier de réponse. Vous pouvez aussi le glisser sur l'encart.",onclick:()=>champ.click()},libelle||"📥 Ranger le DCE téléchargé");
+  return el("span",{class:"ranger-dce"},b,champ);
+}
+// Glisser-déposer d'un fichier sur l'encart d'un marché « J'y réponds »
+function deposeSurCarte(c,m){
+  const avecFichiers=e=>e.dataTransfer&&[...e.dataTransfer.types].includes("Files");
+  c.addEventListener("dragover",e=>{ if(!avecFichiers(e)) return; e.preventDefault(); c.classList.add("depot-survol"); });
+  c.addEventListener("dragleave",e=>{ if(!c.contains(e.relatedTarget)) c.classList.remove("depot-survol"); });
+  c.addEventListener("drop",e=>{ if(!avecFichiers(e)) return; e.preventDefault(); c.classList.remove("depot-survol"); rangerDceFichiers(m,[...e.dataTransfer.files]); });
+}
+// Les deux étapes proposées quand le DCE n'a pas pu être téléchargé automatiquement
+function etapesManuelles(J,m,lien){
+  const li=J.ligne("");
+  li.append(el("div",{class:"etapes-dce"},
+    el("span",{text:"Faites-le en 2 gestes :"}),
+    el("a",{class:"btn",href:lien,target:"_blank",rel:"noopener"},"1. Ouvrir la page et télécharger le DCE ↗"),
+    boutonRangerDce(m,"2. 📥 Ranger le fichier téléchargé")));
+  return li;
+}
+let rangementEnCours=false;
+async function rangerDceFichiers(m,fichiers){
+  fichiers=[...(fichiers||[])].filter(f=>f&&f.size>0);
+  if(!fichiers.length||rangementEnCours) return;
+  const nom=nomDossier(m);
+  const od=lire(CLE_OD,null);
+  const J=journal("Ranger le DCE");
+  const mo=n=>(n/1048576).toFixed(1).replace(".",",");
+  rangementEnCours=true;
+  try{
+    if(msConfigure()&&od&&(msCompte()||!FS_OK)){
+      const jeton=await msJeton(false);
+      if(!jeton){
+        const l=J.ligne("La connexion Microsoft doit être renouvelée.","ko");
+        l.append(" ",el("button",{class:"lien-plus",type:"button",onclick:async()=>{ if(!msCompte()) await msConnecter(); if(await msJeton(true)) rangerDceFichiers(m,fichiers); }},"Se reconnecter"));
+        return;
+      }
+      const l=J.ligne("⏳ Dossier « "+nom+" »…");
+      const rep=await fetch(SERVEUR_DCE+"/onedrive",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+jeton},body:JSON.stringify({driveId:od.driveId,parentId:od.id,dossier:nom})});
+      const r=await rep.json().catch(()=>({message:"Réponse illisible du serveur ("+rep.status+")"}));
+      if(!rep.ok||!r.id){ l.textContent="✗ "+(r.message||"Erreur "+rep.status); l.className="ko"; return; }
+      l.textContent="✓ Dossier « "+nom+" » dans « "+od.nom+" »"; l.className="ok";
+      for(const f of fichiers){
+        if(f.size>200e6){ J.ligne("✗ « "+f.name+" » dépasse 200 Mo : déposez-le à la main dans OneDrive.","ko"); continue; }
+        const l2=J.ligne("⏳ Envoi de « "+f.name+" » ("+mo(f.size)+" Mo) et décompression… (jusqu'à une minute si le serveur était en veille)");
+        try{
+          const rf=await fetch(SERVEUR_DCE+"/onedrive/dce",{method:"POST",headers:{Authorization:"Bearer "+jeton,"X-Drive":od.driveId,"X-Dossier":r.id,"X-Nom":encodeURIComponent(f.name),"Content-Type":"application/octet-stream"},body:f});
+          const d=await rf.json().catch(()=>({message:"Réponse illisible du serveur ("+rf.status+")"}));
+          if(!rf.ok){ l2.textContent="✗ « "+f.name+" » : "+(d.message||"erreur "+rf.status); l2.className="ko"; continue; }
+          l2.textContent="✓ « "+f.name+" » : "+d.fichiers+" fichier"+(d.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(d.total>d.fichiers?" ("+(d.total-d.fichiers)+" en échec)":"");
+          l2.className=d.total>d.fichiers?"ko":"ok";
+        }catch(e){ l2.textContent="✗ Le serveur ne répond pas ("+e.message+"). Réessayez dans une minute."; l2.className="ko"; }
+      }
+      if(r.webUrl) J.ligne("").append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir le dossier dans OneDrive"));
+      return;
+    }
+    if(!FS_OK){ J.ligne("Pour ranger le DCE, connectez-vous à Microsoft (⚙ Réglages) ou utilisez Chrome ou Edge sur PC.","ko"); return; }
+    let racine;
+    try{ racine=await dossierRacine(false); }
+    catch(e){ if(e.name==="AbortError"){ J.ligne("Aucun dossier choisi : rien n'a été rangé.","ko"); return; } throw e; }
+    const dossier=await racine.getDirectoryHandle(nom,{create:true});
+    for(const sd of ["01_Analyse","02_Candidature","03_Offre","04_Contrôle"]){ try{ await dossier.getDirectoryHandle(sd,{create:true}); }catch(e){ await dossier.getDirectoryHandle(sd.normalize("NFD").replace(/[\u0300-\u036f]/g,""),{create:true}); } }
+    J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" »","ok");
+    for(const f of fichiers) await ecrireDceLocal(dossier,nom,f,propre(f.name)||"DCE.zip",f.type||"",J,true);
+  }catch(e){
+    J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
+  }finally{ rangementEnCours=false; }
 }
 
 async function preparerEnLigne(m,od){
@@ -1671,8 +1758,9 @@ async function preparerEnLigne(m,od){
     if(r.dce==="ok") J.ligne("✓ DCE dézippé : "+r.fichiers+" fichier"+(r.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(r.total>r.fichiers?" ("+(r.total-r.fichiers)+" en échec)":""),r.total>r.fichiers?"ko":"ok");
     else{
       const liens=r.dce==="introuvable"&&r.lienDce?{lien:r.lienDce,consultation:""}:await lienDirectDce(m,atx,r), lien=liens.lien;
-      const msg={robot:"La plateforme demande de cocher « Je ne suis pas un robot » : faites le retrait sur la plateforme.",captcha:"Code de vérification non validé.",absent:"Cette plateforme ne permet pas le retrait automatique du DCE.",introuvable:"La consultation n'a pas été retrouvée de façon certaine sur la plateforme.",echec:"Le DCE n'a pas pu être téléchargé : "+(r.message||""),trop_gros:"Le DCE dépasse 300 Mo, téléchargez-le à la main."}[r.dce]||"DCE non déposé.";
-      J.ligne(msg+" ","ko").append(el("a",{href:lien,target:"_blank",rel:"noopener"},"Télécharger le DCE sur la plateforme"));
+      const msg={robot:"La plateforme demande de cocher « Je ne suis pas un robot » : faites le retrait sur la plateforme.",captcha:"Code de vérification non validé.",absent:"Cette plateforme demande un code de vérification ou un compte : Vigie ne peut pas télécharger le DCE tout seul.",introuvable:"La consultation n'a pas été retrouvée de façon certaine sur la plateforme.",echec:"Le DCE n'a pas pu être téléchargé : "+(r.message||""),trop_gros:"Le DCE dépasse 300 Mo, téléchargez-le à la main."}[r.dce]||"DCE non déposé.";
+      J.ligne(msg,"ko");
+      etapesManuelles(J,m,lien);
       const raison={robot:"vérification « Je ne suis pas un robot » à faire sur la plateforme",absent:parExt&&parExt.telecharge?"DCE dans le dossier Téléchargements":"plateforme sans retrait anonyme",introuvable:"consultation non retrouvée de façon certaine sur la plateforme",echec:r.message||"",trop_gros:"DCE de plus de 300 Mo"}[r.dce]||"";
       if(r.id) await deposerRaccourciEnLigne(jeton,od.driveId,r.id,m,liens,raison,J);
     }
