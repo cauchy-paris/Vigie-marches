@@ -345,15 +345,14 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     return "";
   }
   // vérification unique : réglages laissés par un autre compte avant la séparation des espaces
+  // (compte Microsoft mémorisé différent du compte Vigie connecté) : le compte connecté repart vierge
   async function verifierHeritage(email) {
     const ls = window.localStorage, DRAPEAU = "vigie.espaces.v2";
     if (ls.getItem(DRAPEAU)) return false;
     try { ls.setItem(DRAPEAU, "1"); } catch (e) {}
     const autre = utilisateurMicrosoft();
     if (!autre || autre === email) return false;
-    const od = (() => { try { return JSON.parse(ls.getItem("vigie.onedrive.v1") || "null"); } catch (e) { return null; } })();
-    if (!confirm("Sur cet appareil, Vigie est encore relié au compte Microsoft " + autre + (od && od.nom ? " (dossier « " + od.nom + " »)" : "") +
-      ", qui n'est pas celui de " + email + ".\n\nRepartir de zéro pour " + email + " ?\nLes réglages de " + autre + " sont mis de côté et reviendront quand ce compte se connectera à Vigie.")) return false;
+    // automatique, sans question : ces réglages sont rangés sous le compte Microsoft qui les a créés
     await ranger(autre);
     ls.setItem(PROPRIO, email);
     return true;

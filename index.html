@@ -604,8 +604,8 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="comptes.js?v=20261122b"></script>
-<script src="synchro.js?v=20261122b"></script>
+<script src="comptes.js?v=20261122c"></script>
+<script src="synchro.js?v=20261122c"></script>
 <script>
 "use strict";
 /* ====================================================================
@@ -2483,7 +2483,6 @@ function ouvrirOneDrive(){
   const bPc=el("button",{class:"btn",type:"button"},"Choisir le dossier du PC");
   const bDeco=el("button",{class:"btn btn-rouge",type:"button",hidden:true},"Se déconnecter de Microsoft");
   const avert=el("p",{class:"pn-etat ko",hidden:true});
-  const bZero=el("button",{class:"btn btn-rouge",type:"button",title:"Efface de cet appareil les marchés, statuts, connexions drive et mail de votre compte Vigie"},"Repartir de zéro sur cet appareil");
   async function maj(){
     await msInit().catch(()=>null);
     const c=msCompte(), od=lire(CLE_OD,null);
@@ -2509,10 +2508,6 @@ function ouvrirOneDrive(){
     localStorage.removeItem(CLE_OD);
     location.reload();
   };
-  bZero.onclick=async()=>{
-    if(!confirm("Repartir de zéro sur cet appareil ?\nLes marchés, statuts, connexion Microsoft, dossier des réponses et boîte mail enregistrés ici seront effacés de cet appareil.")) return;
-    if(window.Comptes&&Comptes.repartirDeZero) await Comptes.repartirDeZero(); else { localStorage.clear(); location.reload(); }
-  };
   bLien.onclick=async()=>{ bLien.disabled=true; try{ if(await enregistrerLienOd(lien.value)) maj(); }catch(e){ toast(e.message); } finally{ bLien.disabled=false; } };
   lien.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); bLien.click(); } });
   bPc.onclick=async()=>{ try{ await dossierRacine(true); toast("Dossier du PC enregistré"); maj(); }catch(e){} };
@@ -2528,7 +2523,7 @@ function ouvrirOneDrive(){
       el("h4",{text:"Google Drive, Dropbox, iCloud, OneDrive ou serveur — dossier synchronisé sur ce PC"}),
       el("p",{class:"note",text:"Installez l'application de votre drive sur le PC (Google Drive pour ordinateur, Dropbox…), puis choisissez ici le dossier des réponses : le drive le synchronise tout seul. Chrome ou Edge sur PC."}),
       etatPc, el("div",{class:"ligne"},bPc)),
-    el("div",{class:"actions",style:"justify-content:space-between"},bZero,el("button",{class:"btn",type:"button",onclick:fermer},"Fermer")));
+    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:fermer},"Fermer")));
   const fond=el("div",{class:"captcha-fond"},boite);
   fond.addEventListener("click",e=>{ if(e.target===fond) fermer(); });
   document.addEventListener("keydown",echap);
