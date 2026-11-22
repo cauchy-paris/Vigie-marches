@@ -1,7 +1,7 @@
 /* Vigie Marchés : Statuts, multi-sélecteurs, filtres, sources, divers. */
 "use strict";
 /* ---------- Statuts ---------- */
-function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi,siretAcheteur}=m; return {siretAcheteur,manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
+function snapshot(m){ const {source,nbLots,horsBoamp,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi,siretAcheteur}=m; return {...(source?{source,nbLots,horsBoamp}:{}),siretAcheteur,manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
   // travail d'équipe : un marché « J'y réponds » n'est pris que par un collaborateur de la société
@@ -82,13 +82,13 @@ function multiSelecteur(cont,options,choix,placeholder,surChange){
 
 /* ---------- Filtres : sauvegarde / restauration ---------- */
 function sauverFiltres(){
-  ecrire(CLE_FILTRES,{type:etat.type,metiers:etat.metiers,regions:etat.regions,deps:etat.deps,mots:$("#fMots").value,complet:$("#fTexteComplet").checked,acheteur:$("#fAcheteur").value,nature:$("#fNature").value,publie:$("#fPublie").value,enCours:$("#fEnCours").checked,tri:$("#fTri").value});
+  ecrire(CLE_FILTRES,{type:etat.type,metiers:etat.metiers,regions:etat.regions,deps:etat.deps,mots:$("#fMots").value,complet:$("#fTexteComplet").checked,acheteur:$("#fAcheteur").value,nature:$("#fNature").value,publie:$("#fPublie").value,enCours:$("#fEnCours").checked,plateformes:$("#fPlateformes")?$("#fPlateformes").checked:true,tri:$("#fTri").value});
 }
 function restaurerFiltres(){
   const f=lire(CLE_FILTRES,null); if(!f) return;
   etat.type=f.type||""; etat.metiers.splice(0,etat.metiers.length,...(f.metiers||[])); etat.deps.splice(0,etat.deps.length,...(f.deps||[])); etat.regions.splice(0,etat.regions.length,...(f.regions||[]));
   $("#fMots").value=f.mots||""; $("#fTexteComplet").checked=!!f.complet; $("#fAcheteur").value=f.acheteur||"";
-  $("#fNature").value=f.nature??"APPEL_OFFRE"; $("#fPublie").value=f.publie||""; $("#fEnCours").checked=f.enCours!==false; $("#fTri").value=f.tri||"datelimitereponse asc";
+  $("#fNature").value=f.nature??"APPEL_OFFRE"; $("#fPublie").value=f.publie||""; $("#fEnCours").checked=f.enCours!==false; if($("#fPlateformes")) $("#fPlateformes").checked=f.plateformes!==false; $("#fTri").value=f.tri||"datelimitereponse asc";
 }
 function majSegments(){ document.querySelectorAll("#fType button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.v===etat.type))); }
 

@@ -35,6 +35,8 @@ async function navigateur(browser, email, erreurs) {
   }, { jeton: r.json.jeton, lien: r.json.lien, compte: r.json.compte });
   await ctx.route(u => !u.href.startsWith("http://localhost"), async route => {
     const u = route.request().url();
+    // recherche directe sur les plateformes : pas d'appel extérieur pendant les tests
+    if (u.startsWith(SERVEUR + "/plateformes")) return route.fulfill({ json: { ok: true, plateformes: [] }, headers: { "Access-Control-Allow-Origin": "*" } });
     if (u.startsWith(SERVEUR)) return route.fulfill({ response: await route.fetch({ url: serveur.base + u.slice(SERVEUR.length), headers: { ...route.request().headers(), origin: "http://localhost:4173" } }) });
     if (u.includes("/catalog/datasets/boamp/records")) return route.fulfill({ json: BOAMP, headers: { "Access-Control-Allow-Origin": "*" } });
     if (/exceljs/.test(u)) return route.fulfill({ path: require.resolve("exceljs/dist/exceljs.min.js"), contentType: "text/javascript" });

@@ -58,6 +58,7 @@ async function rechercher(page=0){
     afficherListe($("#liste"),items,"Aucun marché ne correspond à ces filtres. Essayez d'élargir la recherche (moins de départements, sans mots-clés, ou en décochant « encore ouverts »).");
     afficherPagination(total);
     majSnapshots(items);
+    lancerPlateformes(items);
   }catch(e){
     if(id!==requeteEnCours) return;
     $("#nbRes").textContent="!";
@@ -67,6 +68,7 @@ async function rechercher(page=0){
     div.innerHTML='<strong>Le BOAMP n\'a pas pu être interrogé.</strong><br>Vérifiez la connexion internet, puis relancez. Si le problème persiste, le message technique ci-dessous m\'aidera à corriger :<br><code></code>';
     div.querySelector("code").textContent=e.message+"  |  where = "+where;
     $("#liste").appendChild(div);
+    lancerPlateformes([]); // le BOAMP ne répond pas : les plateformes s'affichent quand même
   }
 }
 function afficherCompteur(total){

@@ -355,3 +355,15 @@ select.attribuer{border:1.5px solid var(--trait);border-radius:8px;padding:6px 8
 .responsable-etape{font-size:12.5px;color:#1e7b3c}
 .date-depot input{width:140px;text-align:left}
 .date-depot-bord{display:block;color:var(--gris);font-size:12px}
+
+/* Recherche directe sur les plateformes (PLACE, Maximilien, AWS-Achat) */
+.bloc-plateformes{display:grid;gap:14px;margin:4px 0 18px;padding:16px;border:1.5px solid var(--bleu);border-radius:14px;background:var(--bleu-clair,#eef3ff)}
+.bloc-plateformes .pf-tete h2{margin:0 0 8px;font-size:17px;color:var(--bleu);display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.bloc-plateformes .pf-nb{font-size:24px;font-weight:800}
+.bloc-plateformes .pf-sources{list-style:none;margin:0 0 6px;padding:0;display:flex;gap:8px;flex-wrap:wrap}
+.bloc-plateformes .pf-sources li{font-size:13px;padding:4px 10px;border-radius:999px;background:var(--blanc);border:1px solid var(--trait)}
+.bloc-plateformes .pf-sources li.ko{border-color:var(--rouge);color:var(--rouge)}
+.bloc-plateformes .pf-etat{margin:0;font-size:13px;color:var(--gris)}
+.bloc-plateformes .pf-etat.ko{color:var(--rouge)}
+.bloc-plateformes .pf-liste{display:grid;gap:14px}
+.badge.source-pf{background:var(--bleu);color:var(--blanc)}

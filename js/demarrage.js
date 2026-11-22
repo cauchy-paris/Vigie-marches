@@ -16,7 +16,7 @@ function init(){
   msRegions=multiSelecteur($("#fRegions"),REGIONS.map(r=>[r[0],r[1]]),etat.regions,"Toutes les régions",relancerBientot);
   msDeps=multiSelecteur($("#fDeps"),DEPS.map(([c,n])=>[c,c+" · "+n]),etat.deps,"Toute la France",relancerBientot);
   document.querySelectorAll("#fType button").forEach(b=>b.onclick=()=>{ etat.type=b.dataset.v; majSegments(); msMetiers.rafraichir(); rechercher(0); });
-  ["#fNature","#fPublie","#fEnCours","#fTexteComplet","#fTri"].forEach(s=>$(s).addEventListener("change",()=>rechercher(0)));
+  ["#fNature","#fPublie","#fEnCours","#fTexteComplet","#fTri","#fPlateformes"].forEach(s=>$(s).addEventListener("change",()=>rechercher(0)));
   $("#formFiltres").addEventListener("submit",e=>{ e.preventDefault(); rechercher(0); });
   $("#btnRaz").onclick=()=>{ etat.type=""; etat.metiers.length=0; etat.deps.length=0; etat.regions.length=0; $("#formFiltres").reset(); majSegments(); msMetiers.rafraichir(); msDeps.rafraichir(); msRegions.rafraichir(); rechercher(0); };
   document.querySelectorAll(".onglet").forEach(b=>b.onclick=()=>changerVue(b.dataset.vue));
