@@ -39,4 +39,24 @@ async function demarrerServeur(env = {}) {
   return { base, appel, journal: () => journal, arreter: () => new Promise(ok => { proc.once("exit", ok); proc.kill(); }) };
 }
 
-module.exports = { demarrerServeur, SITE };
+// Base Postgres neuve pour un test (TEST_DATABASE_URL = serveur Postgres de test ; sans elle, ces tests sont sautés)
+async function baseNeuve() {
+  const url = process.env.TEST_DATABASE_URL;
+  if (!url) return null;
+  const { Client } = require("pg");
+  const nom = "vigie_t_" + process.pid + "_" + Math.random().toString(36).slice(2, 8);
+  const cx = new Client({ connectionString: url });
+  await cx.connect();
+  await cx.query("create database " + nom);
+  await cx.end();
+  const u = new URL(url); u.pathname = "/" + nom;
+  return u.toString();
+}
+async function requete(url, sql, params) {
+  const { Client } = require("pg");
+  const cx = new Client({ connectionString: url });
+  await cx.connect();
+  try { return (await cx.query(sql, params)).rows; } finally { await cx.end(); }
+}
+
+module.exports = { demarrerServeur, SITE, baseNeuve, requete };

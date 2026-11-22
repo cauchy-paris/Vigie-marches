@@ -19,7 +19,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # comptes Vigie (server/comptes.js)
+      # comptes Vigie (server/comptes.js) ; base Postgres des comptes et sociétés (server/stockage.js, Neon gratuit par exemple)
+      - key: DATABASE_URL
+        sync: false
       - key: VIGIE_SECRET
         generateValue: true
       - key: VIGIE_CODE_INSTALLATION
