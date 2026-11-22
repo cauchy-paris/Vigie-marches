@@ -196,6 +196,8 @@ async function telechargerParCode(depart, reprise) {
     code = String(reprise.code || "").trim().slice(0, 40);
   } else {
     jar = new Map(); vus = [];
+    const aws = depart.match(/^https:\/\/www\.marches-publics\.info\/Annonces\/[A-Z]*_?(\d{5,9})\.htm/i);
+    if (aws) depart = "https://www.marches-publics.info/mpiaws/index.cfm?fuseaction=dematEnt.login&type=DCE&IDM=" + aws[1];
     const r0 = await requete(depart, jar);
     if (!/text\/html/i.test(r0.rep.headers.get("content-type") || "")) { r0.rep.consultation = { base: depart, id: "", org: "" }; return r0.rep; }
     url = r0.url; html = await r0.rep.text();
@@ -223,7 +225,10 @@ async function telechargerParCode(depart, reprise) {
       const fichier = ls.find(l => !vus.includes(l.url) && (/\.(zip|rar|7z)(\?|$)/i.test(l.url) || /(download|telecharg|getfile|fichier)/i.test(l.url) && /dce|zip|dossier|tout|complet|t[ée]l[ée]charg/i.test(l.texte + l.url)) && !/reglement|\brc\b|avis/i.test(l.texte));
       // 4. formulaire à valider (choix des lots, conditions), jamais connexion ni recherche
       const fSuite = fs.find(f => !champs(f.html).some(c => c.type === "password" || RE_CONNEXION.test(c.name || "")) && !/recherche|search|keyword/i.test(f.action + " " + champs(f.html).map(c => c.name).join(" ")) && champs(f.html).some(c => /^(submit|image)$/.test(c.type) || c.tag === "button"));
+      // lien vers la page de retrait du DCE (avis AWS « /Annonces/… » → dematEnt.login&type=DCE)
+      const retrait = ls.find(l => !vus.includes(l.url) && (/type=DCE|dematEnt\.login|fuseaction=dce\./i.test(l.url) || /(t[ée]l[ée]charger|retirer|retrait|acc[ée]der).{0,25}(dce|dossier de consultation)/i.test(l.texte)) && !/demat\.termes|inscri|reglement/i.test(l.url));
       if (fichier) suivant = { url: fichier.url };
+      else if (retrait) suivant = { url: retrait.url };
       else if (fSuite) suivant = { url: fSuite.action, methode: fSuite.methode, corps: donneesFormulaire(fSuite, true) };
     }
     if (!suivant) throw new Error(codeEnvoye ? "Code accepté, mais lien de téléchargement du DCE non trouvé sur la page suivante" : "Page de retrait anonyme non reconnue");

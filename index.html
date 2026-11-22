@@ -1433,9 +1433,13 @@ async function dceServeurAvecCaptcha(url,J){
    (le code s'affiche dans Vigie, l'utilisateur le recopie, le serveur télécharge le DCE). */
 const HOTES_CODE=/(^|\.)(marches-publics\.info|e-marchespublics\.com)$/i;
 function pageACode(m){
-  const cands=[m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])].filter(Boolean).map(u=>String(u).replace(/&amp;/g,"&")).filter(u=>{ try{ const x=new URL(u); return x.protocol==="https:"&&HOTES_CODE.test(x.hostname)&&!estAccueil(u)&&!/demat\.termes/i.test(u); }catch(e){ return false; } });
-  const url=cands.find(u=>/type=DCE|dematEnt|annonce_marche_public|appel-offre|dossier_de_consultation/i.test(u))||cands[0];
-  return url?{url,dceAuto:SERVEUR_DCE+"/dce?url="+encodeURIComponent(url)}:null;
+  const cands=[m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])].filter(Boolean).map(u=>String(u).replace(/&amp;/g,"&").replace(/^http:\/\//i,"https://")).filter(u=>{ try{ const x=new URL(u); return x.protocol==="https:"&&HOTES_CODE.test(x.hostname)&&!estAccueil(u)&&!/demat\.termes/i.test(u); }catch(e){ return false; } });
+  const url=cands.find(u=>/type=DCE|dematEnt|annonce_marche_public|appel-offre|dossier_de_consultation/i.test(u))||cands.find(u=>/\/Annonces\//i.test(u))||cands[0];
+  if(!url) return null;
+  // avis AWS « /Annonces/AAPC_1898458.htm » : la page de retrait du DCE porte le même numéro (IDM)
+  const aws=url.match(/marches-publics\.info\/Annonces\/[A-Z]*_?(\d{5,9})\.htm/i);
+  const retrait=aws?"https://www.marches-publics.info/mpiaws/index.cfm?fuseaction=dematEnt.login&type=DCE&IDM="+aws[1]:url;
+  return {url,dceAuto:SERVEUR_DCE+"/dce?url="+encodeURIComponent(retrait)};
 }
 
 /* ---------- Extension Vigie (sessions des plateformes, Chrome/Edge) ---------- */
@@ -1761,7 +1765,7 @@ async function preparerEnLigne(m,od){
   const params={};
   if(atx&&atx.dceAuto){ try{ new URL(atx.dceAuto).searchParams.forEach((v,k)=>{ if(k!=="quoi") params[k]=v; }); }catch(e){} }
   const pc=!atx&&pageACode(m);
-  if(pc) params.url=pc.url;
+  if(pc) params.url=new URL(pc.dceAuto).searchParams.get("url");
   // DCE récupéré d'abord avec l'extension Vigie (session de l'utilisateur), sinon par le serveur
   const parExt=pc?null:await dceParExtension(m,atx,J);
   const fichierExt=parExt&&parExt.blob?parExt:null;
