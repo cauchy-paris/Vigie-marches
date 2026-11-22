@@ -39,7 +39,7 @@ code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5
   <p>Vigie Marchés est réservé aux personnes à qui l'administrateur a créé un compte. Cette page explique l'installation (une seule fois) et la gestion des comptes.</p>
 </div></header>
 <main>
-<nav><a href="#installation">1. Installation</a> <a href="#sauvegarde">2. Sauvegarde automatique</a> <a href="#comptes">3. Créer les comptes</a> <a href="#utilisateur">4. Pour chaque utilisateur</a> <a href="#securite">5. Ce qui est protégé</a></nav>
+<nav><a href="#installation">1. Installation</a> <a href="#sauvegarde">2. Sauvegarde automatique</a> <a href="#comptes">3. Créer les comptes</a> <a href="#utilisateur">4. Pour chaque utilisateur</a> <a href="#oubli">5. Mot de passe oublié</a> <a href="#securite">6. Ce qui est protégé</a></nav>
 
 <section id="installation">
 <h2>1. Installation : créer le compte administrateur</h2>
@@ -92,8 +92,20 @@ code{background:var(--bleu-clair);border-radius:4px;padding:0 4px;font-size:13.5
 <p class="astuce">Sans connexion Microsoft sur un appareil, ses données restent seulement dans son navigateur, comme avant.</p>
 </section>
 
+<section id="oubli">
+<h2>5. Mot de passe oublié</h2>
+<p>Sur l'écran de connexion, le lien <b>Mot de passe oublié ?</b> envoie à l'adresse saisie un mail avec un lien pour créer un nouveau mot de passe (valable 1 heure, une seule fois), si cette adresse a un compte. Pour que Vigie puisse envoyer ce mail, l'administrateur fait une fois :</p>
+<ol>
+<li>Créez un compte gratuit sur <a href="https://www.brevo.com" target="_blank" rel="noopener">brevo.com</a> (300 mails par jour offerts, sans carte bancaire).</li>
+<li>Dans Brevo, menu <b>Senders, Domains &amp; Dedicated IPs</b> (Expéditeurs), ajoutez l'adresse qui enverra les mails (par exemple la vôtre) et validez-la avec le code reçu.</li>
+<li>Dans Brevo, menu <b>SMTP &amp; API</b>, onglet <b>API Keys</b>, bouton <b>Generate a new API key</b>, nommez-la « Vigie » et copiez la clé (elle commence par <code>xkeysib-</code>).</li>
+<li>Sur Render, service <code>vigie-marches-dce</code>, <b>Environment</b> : ajoutez <code>BREVO_API_KEY</code> (la clé) et <code>MAIL_EXPEDITEUR</code> (l'adresse validée à l'étape 2), puis <b>Save, rebuild, and deploy</b>.</li>
+</ol>
+<p class="astuce">Tant que ce n'est pas fait, « Mot de passe oublié » indique de demander un nouveau mot de passe à l'administrateur (Gérer les comptes, bouton Nouveau mot de passe).</p>
+</section>
+
 <section id="securite">
-<h2>5. Ce qui est protégé</h2>
+<h2>6. Ce qui est protégé</h2>
 <ul>
 <li>Le serveur <code>vigie-marches-dce</code> (DCE, RC, CAPTCHA, analyse du RC, dépôt dans le drive, lecture des alertes mail, ajout par lien) ne répond plus qu'aux utilisateurs connectés, et seulement depuis le site Vigie.</li>
 <li>Le site affiche l'écran de connexion tant qu'on n'est pas connecté. Le code de la page reste public (il est sur GitHub), mais il ne contient aucune donnée ni aucun accès.</li>

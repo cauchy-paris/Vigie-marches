@@ -5,6 +5,9 @@
 // - Les sessions sont des jetons signés (HMAC, VIGIE_SECRET) : rien à stocker côté serveur.
 "use strict";
 const crypto = require("crypto");
+const { envoyerMail, mailConfigure } = require("./envoi");
+const SITE = "https://vigie-marches.onrender.com";
+const DUREE_REINIT = 3600e3; // lien « mot de passe oublié » : 1 heure, une seule utilisation
 
 const SECRET = process.env.VIGIE_SECRET || (console.log("ATTENTION : VIGIE_SECRET absent, les connexions seront perdues au redémarrage"), crypto.randomBytes(32).toString("hex"));
 const DUREE_SESSION = 30 * 864e5; // 30 jours
@@ -44,7 +47,7 @@ const publicCompte = c => ({ email: c.e, nom: c.n, role: c.r, provisoire: !!c.t,
 
 /* ---------- jetons signés ---------- */
 function signer(c, type) {
-  const p = b64(JSON.stringify({ e: c.e, v: c.v, t: type, x: Date.now() + (type === "l" ? DUREE_LIEN : DUREE_SESSION) }));
+  const p = b64(JSON.stringify({ e: c.e, v: c.v, t: type, x: Date.now() + (type === "l" ? DUREE_LIEN : type === "r" ? DUREE_REINIT : DUREE_SESSION) }));
   return p + "." + crypto.createHmac("sha256", SECRET).update(p).digest("base64url");
 }
 function lireJeton(j, type) {
@@ -111,10 +114,13 @@ async function sauvegarder() {
   }
 }
 
+// le texte à coller dans Render (empreintes de tous les mots de passe) n'est montré qu'à un administrateur
+const pourQui = (sv, c) => (sv.auto || c.r === "admin" ? sv : { auto: false, admin: true });
+
 /* ---------- routes /compte/... ---------- */
 async function routeCompte(req, res, u, { json, lireCorps, ip }) {
   const chemin = u.pathname.slice("/compte/".length);
-  if (chemin === "etat") return json(res, 200, { installe: comptes.size > 0, installable: !!process.env.VIGIE_CODE_INSTALLATION, sauvegardeAuto: !!(process.env.RENDER_API_KEY && process.env.RENDER_SERVICE_ID) });
+  if (chemin === "etat") return json(res, 200, { installe: comptes.size > 0, installable: !!process.env.VIGIE_CODE_INSTALLATION, oubli: mailConfigure(), sauvegardeAuto: !!(process.env.RENDER_API_KEY && process.env.RENDER_SERVICE_ID) });
   if (req.method !== "POST" && chemin !== "moi" && chemin !== "liste") return json(res, 405, { message: "POST attendu" });
   let c = {};
   if (req.method === "POST") { try { c = JSON.parse(await lireCorps(req, 4000) || "{}"); } catch (e) { return json(res, 400, { message: "Demande illisible." }); } }
@@ -141,6 +147,36 @@ async function routeCompte(req, res, u, { json, lireCorps, ip }) {
     return json(res, 200, sessionDe(compte));
   }
 
+  // mot de passe oublié : lien envoyé par mail si l'adresse a un compte (même réponse dans tous les cas)
+  if (chemin === "oubli") {
+    if (!mailConfigure()) return json(res, 503, { message: "L'envoi de mail n'est pas encore configuré : demandez à l'administrateur de Vigie un nouveau mot de passe." });
+    if (!mailValide(email)) return json(res, 400, { message: "Adresse mail invalide." });
+    if (bloque("oubli:" + ip) || bloque("oubli:" + email)) return json(res, 429, { message: "Trop de demandes, réessayez dans 15 minutes." });
+    echec("oubli:" + ip); echec("oubli:" + email);
+    const compte = comptes.get(email);
+    if (compte) {
+      const lien = SITE + "/#reinit=" + signer(compte, "r");
+      const nom = compte.n && compte.n !== compte.e ? " " + compte.n : "";
+      envoyerMail({
+        a: compte.e, sujet: "Vigie Marchés : créer un nouveau mot de passe",
+        texte: `Bonjour${nom},\n\nPour choisir un nouveau mot de passe Vigie Marchés, ouvrez ce lien (valable 1 heure, une seule fois) :\n${lien}\n\nSi vous n'avez rien demandé, ignorez ce mail : votre mot de passe actuel reste valable.`,
+        html: `<div style="font:15px/1.5 Arial,sans-serif;color:#14203d;max-width:560px"><div style="background:#16337a;color:#fff;padding:14px 18px;border-bottom:4px solid #d22d39;font-weight:bold;font-size:18px">Vigie Marchés</div><div style="padding:18px"><p>Bonjour${nom.replace(/</g, "&lt;")},</p><p>Pour choisir un nouveau mot de passe, cliquez sur le bouton ci-dessous. Le lien est valable 1 heure et ne sert qu'une fois.</p><p><a href="${lien}" style="display:inline-block;background:#16337a;color:#fff;padding:11px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Créer mon nouveau mot de passe</a></p><p style="color:#5b6785;font-size:13px">Si vous n'avez rien demandé, ignorez ce mail : votre mot de passe actuel reste valable.</p></div></div>`,
+      }).then(() => console.log(new Date().toISOString(), "Comptes : lien de réinitialisation envoyé à", email))
+        .catch(e => console.log("Comptes : envoi du lien impossible", email, e.message));
+    } else console.log(new Date().toISOString(), "Comptes : mot de passe oublié pour une adresse inconnue");
+    return json(res, 200, { message: "Si cette adresse a un compte Vigie, un mail vient de lui être envoyé avec un lien pour créer un nouveau mot de passe (pensez aux courriers indésirables)." });
+  }
+  if (chemin === "reinitialisation") {
+    if (bloque(ip)) return json(res, 429, { message: "Trop d'essais, réessayez dans 15 minutes." });
+    const compte = lireJeton(String(c.jeton || ""), "r");
+    if (!compte) { echec(ip); return json(res, 400, { message: "Ce lien a expiré ou a déjà servi : redemandez-en un depuis « Mot de passe oublié »." }); }
+    const nouveau = String(c.nouveau || "");
+    if (nouveau.length < MIN_MDP) return json(res, 400, { message: "Le mot de passe doit faire au moins " + MIN_MDP + " caractères." });
+    compte.h = hacher(nouveau); compte.v++; delete compte.t; // v++ : le lien ne resservira pas
+    console.log(new Date().toISOString(), "Comptes : mot de passe réinitialisé par lien", compte.e);
+    return json(res, 200, { ...sessionDe(compte), sauvegarde: pourQui(await sauvegarder(), compte) });
+  }
+
   // toutes les autres routes demandent d'être connecté
   const moi = lireJeton(req.headers["x-vigie"], "s");
   if (!moi) { res.setHeader("X-Vigie-Connexion", "1"); return json(res, 401, { erreur: "compte", message: "Session expirée : reconnectez-vous." }); }
@@ -160,7 +196,7 @@ async function routeCompte(req, res, u, { json, lireCorps, ip }) {
     if (nouveau.length < MIN_MDP) return json(res, 400, { message: "Le mot de passe doit faire au moins " + MIN_MDP + " caractères." });
     if (nouveau === c.ancien) return json(res, 400, { message: "Choisissez un mot de passe différent de l'actuel." });
     moi.h = hacher(nouveau); moi.v++; delete moi.t;
-    return json(res, 200, { ...sessionDe(moi), sauvegarde: await sauvegarder() });
+    return json(res, 200, { ...sessionDe(moi), sauvegarde: pourQui(await sauvegarder(), moi) });
   }
 
   // administration (rôle admin)

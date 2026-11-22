@@ -27,3 +27,8 @@ services:
       # clé d'API Render (facultative, gratuite) : sauvegarde automatique des comptes dans VIGIE_COMPTES
       - key: RENDER_API_KEY
         sync: false
+      # « Mot de passe oublié » : envoi du lien par mail (compte Brevo gratuit, voir aide/comptes.html)
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_EXPEDITEUR
+        sync: false
