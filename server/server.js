@@ -173,7 +173,7 @@ function donneesFormulaire(f, toutCocher) {
     if (!c.name || c.tag !== "input") continue;
     if (/^(submit|button|image|file|reset)$/.test(c.type)) continue;
     if (c.type === "checkbox") { if (c.checked || toutCocher) d.append(c.name, c.value || "on"); continue; }
-    if (c.type === "radio") { if (c.checked) d.set(c.name, c.value || "on"); continue; }
+    if (c.type === "radio") { if (c.checked && !d.has(c.name)) d.set(c.name, c.value || "on"); if (/complet|tous|tout|global|ensemble|integral/i.test((c.value || "") + " " + (c.id || ""))) d.set(c.name, c.value || "on"); continue; }
     d.append(c.name, c.value || "");
   }
   for (const m of f.html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
@@ -185,6 +185,20 @@ function donneesFormulaire(f, toutCocher) {
   const b = champs(f.html).find(c => c.name && /^(submit|image)$/.test(c.type) && /retrait|t[ée]l[ée]charg|valider|continuer|suivant|anonyme|ok/i.test((c.value || "") + c.name));
   if (b) d.set(b.name, b.value || "");
   return d;
+}
+const texteDe = h => decode(h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+// Note d'un lien ou d'un formulaire : plus elle est haute, plus il mène au DCE complet
+function noteDce(url, texte) {
+  const t = (texte || "").slice(0, 300), u = url || "";
+  let n = 0;
+  if (/retir\w*\s+(le\s+)?(dce|dossier)|t[ée]l[ée]charg\w*\s+(le\s+|du\s+)?(dce|dossier)|dossier (complet|de consultation)|dce complet|tout t[ée]l[ée]charger|l.ensemble des (pi[eè]ces|documents)|retrait (anonyme|du dce)|acc[ée]d\w*\s+(au\s+)?(dce|dossier)/i.test(t)) n += 6;
+  if (/type=DCE|dematEnt\.login|fuseaction=dce\.|telechargerDCE|DemandeTelechargementDce|dossier_de_consultation/i.test(u)) n += 4;
+  if (/\.(zip|rar|7z)(\?|$)/i.test(u)) n += 3;
+  if (/\b(dce|zip)\b/i.test(t)) n += 1;
+  if (/r[eè]glement|\brc\b|avis|cctp|ccap|bpu|dpgf|cahier|annexe/i.test(t) && !/dce|dossier complet|tout/i.test(t)) n -= 8;
+  if (/\.(pdf|docx?|xlsx?|odt|ods)(\?|$)/i.test(u)) n -= 8;
+  if (/demat\.termes|inscri|login\.cfm|connexion|motdepasse|password|reglement|DownloadReglement|cgu|mentions/i.test(u) && !/dematEnt\.login/i.test(u)) n -= 10;
+  return n;
 }
 async function telechargerParCode(depart, reprise) {
   let jar, url, html, code = null, vus;
@@ -221,15 +235,14 @@ async function telechargerParCode(depart, reprise) {
       suivant = { url: fCode.action, methode: fCode.methode, corps: d };
       code = null; codeEnvoye = true;
     } else {
-      // 3. lien direct vers le fichier
-      const fichier = ls.find(l => !vus.includes(l.url) && (/\.(zip|rar|7z)(\?|$)/i.test(l.url) || /(download|telecharg|getfile|fichier)/i.test(l.url) && /dce|zip|dossier|tout|complet|t[ée]l[ée]charg/i.test(l.texte + l.url)) && !/reglement|\brc\b|avis/i.test(l.texte));
-      // 4. formulaire à valider (choix des lots, conditions), jamais connexion ni recherche
-      const fSuite = fs.find(f => !champs(f.html).some(c => c.type === "password" || RE_CONNEXION.test(c.name || "")) && !/recherche|search|keyword/i.test(f.action + " " + champs(f.html).map(c => c.name).join(" ")) && champs(f.html).some(c => /^(submit|image)$/.test(c.type) || c.tag === "button"));
-      // lien vers la page de retrait du DCE (avis AWS « /Annonces/… » → dematEnt.login&type=DCE)
-      const retrait = ls.find(l => !vus.includes(l.url) && (/type=DCE|dematEnt\.login|fuseaction=dce\./i.test(l.url) || /(t[ée]l[ée]charger|retirer|retrait|acc[ée]der).{0,25}(dce|dossier de consultation)/i.test(l.texte)) && !/demat\.termes|inscri|reglement/i.test(l.url));
-      if (fichier) suivant = { url: fichier.url };
-      else if (retrait) suivant = { url: retrait.url };
-      else if (fSuite) suivant = { url: fSuite.action, methode: fSuite.methode, corps: donneesFormulaire(fSuite, true) };
+      // Toujours le DCE complet : le bouton / lien « Retirer le DCE », « Télécharger le dossier complet »…
+      // jamais une pièce isolée (RC, avis, CCTP…).
+      const fSuite = fs.filter(f => !champs(f.html).some(c => c.type === "password" || RE_CONNEXION.test(c.name || "")) && !/recherche|search|keyword/i.test(f.action + " " + champs(f.html).map(c => c.name).join(" ")) && champs(f.html).some(c => /^(submit|image)$/.test(c.type) || c.tag === "button"))
+        .map(f => ({ f, note: noteDce(f.action, [...f.html.matchAll(/<button\b[^>]*>([\s\S]*?)<\/button>/gi)].map(b => texteDe(b[1])).concat(champs(f.html).filter(c => /^(submit|image|button)$/.test(c.type)).map(c => c.value || "")).join(" ")) }))
+        .filter(x => x.note > -5).sort((a, b) => b.note - a.note)[0];
+      const lien = ls.filter(l => !vus.includes(l.url)).map(l => ({ l, note: noteDce(l.url, l.texte) })).filter(x => x.note > 0).sort((a, b) => b.note - a.note)[0];
+      if (lien && (!fSuite || lien.note >= fSuite.note)) suivant = { url: lien.l.url };
+      else if (fSuite) suivant = { url: fSuite.f.action, methode: fSuite.f.methode, corps: donneesFormulaire(fSuite.f, true) };
     }
     if (!suivant) throw new Error(codeEnvoye ? "Code accepté, mais lien de téléchargement du DCE non trouvé sur la page suivante" : "Page de retrait anonyme non reconnue");
     let r;

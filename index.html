@@ -195,6 +195,8 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 .manuels-tete{font:700 13px/1.3 var(--f-titre);color:var(--bleu);text-transform:uppercase;letter-spacing:.05em;padding:4px 2px}
 .manuels-tete small{display:block;text-transform:none;letter-spacing:0;font:400 12.5px var(--f-texte);color:var(--gris)}
 .badge.manuel{background:var(--rouge);color:var(--blanc)}
+.btn.dossier-ko{background:var(--rouge);border-color:var(--rouge);color:var(--blanc)}
+.btn.dossier-ok{background:#14603a;border-color:#14603a;color:var(--blanc)}
 /* Annonces du jour : rappels J-7 / J-2, résumé du matin, modifications */
 .annonces{max-width:1400px;margin:0 auto;padding:14px 20px 0;display:grid;gap:10px}
 .annonces:empty{display:none}
@@ -1131,7 +1133,7 @@ function carte(m){
     docs.append(el("button",{class:"btn",type:"button",title:"Corriger ou compléter les informations de ce marché",onclick:()=>ouvrirAjout(manuels[m.idweb]||m)},"✎ Modifier"));
     if(manuels[m.idweb]) docs.append(el("button",{class:"btn btn-rouge",type:"button",title:"Retirer ce marché de la recherche",onclick:()=>retirerManuel(manuels[m.idweb])},"Retirer"));
   }
-  if(st==="reponse") docs.append(el("button",{class:"btn btn-plein",type:"button",title:"Crée le dossier de réponse dans OneDrive et y dépose le DCE dézippé",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse"),boutonRangerDce(m));
+  if(st==="reponse") docs.append(boutonDossier(m),boutonRangerDce(m));
   if(st==="reponse") deposeSurCarte(c,m);
   if(m.limite&&joursRestants(m.limite)>=0) docs.append(menuAgenda(m));
   c.append(el("div",{class:"pied"},docs,sts));
@@ -1633,12 +1635,33 @@ async function preparerDossier(m){
       blob=await rep.blob();
       l.textContent="✓ DCE téléchargé ("+(blob.size/1048576).toFixed(1).replace(".",",")+" Mo)"; l.className="ok";
     }
-    await ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,false);
+    const n=await ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,false);
+    if(n) marquerDce(m,n,"dossier du PC");
   }catch(e){
     J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
   }finally{ preparationEnCours=false; }
 }
 
+/* Bouton « 📁 Dossier de réponse » : rouge tant que le DCE n'est pas dans le dossier, vert quand le dossier
+   est créé et que le DCE s'y trouve. L'état est gardé dans le statut du marché, donc synchronisé entre appareils. */
+function etatDossier(b,d){
+  let quand=""; try{ if(d) quand=new Date(d.date).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"}); }catch(e){}
+  b.className="btn btn-dossier "+(d?"dossier-ok":"dossier-ko");
+  b.title=d?"Dossier créé, DCE rangé"+(d.lieu?" dans "+d.lieu:"")+(d.fichiers?" ("+d.fichiers+" fichier"+(d.fichiers>1?"s":"")+")":"")+(quand?" le "+quand:"")+". Cliquer pour le recréer ou y redéposer le DCE.":"DCE pas encore dans le dossier de réponse : cliquer pour créer le dossier et y déposer le DCE dézippé";
+}
+function boutonDossier(m){
+  const b=el("button",{type:"button",onclick:()=>preparerDossier(m)},"📁 Dossier de réponse");
+  b.dataset.dossier=m.idweb;
+  etatDossier(b,statuts[m.idweb]&&statuts[m.idweb].dce);
+  return b;
+}
+function marquerDce(m,fichiers,lieu){
+  if(!m||!m.idweb) return;
+  if(!statuts[m.idweb]) statuts[m.idweb]={statut:"reponse",date:new Date().toISOString(),m:snapshot(m)};
+  statuts[m.idweb].dce={date:new Date().toISOString(),fichiers:fichiers||0,lieu:lieu||""};
+  ecrire(CLE_STATUTS,statuts);
+  document.querySelectorAll('button[data-dossier="'+CSS.escape(m.idweb)+'"]').forEach(b=>etatDossier(b,statuts[m.idweb].dce));
+}
 // Écrit le DCE (zip dézippé dans DCE/, sinon fichier tel quel) dans le dossier de réponse du PC
 async function ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,dansDce){
   const sansAcc=t=>t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\x20-\x7e]/g,"_");
@@ -1649,7 +1672,7 @@ async function ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,dansDce){
     let f; try{ f=await d.getFileHandle(nomF,{create:true}); }catch(e){ f=await d.getFileHandle(sansAcc(nomF),{create:true}); }
     const w=await f.createWritable(); await w.write(donnees); await w.close();
   };
-  if(!/zip/i.test(type)&&!/\.zip$/i.test(nomFichier)){ await ecrireFichier(dansDce?await dossier.getDirectoryHandle("DCE",{create:true}):dossier,nomFichier,blob); J.ligne("✓ Fichier enregistré : "+(dansDce?"DCE/":"")+nomFichier,"ok"); return; }
+  if(!/zip/i.test(type)&&!/\.zip$/i.test(nomFichier)){ await ecrireFichier(dansDce?await dossier.getDirectoryHandle("DCE",{create:true}):dossier,nomFichier,blob); J.ligne("✓ Fichier enregistré : "+(dansDce?"DCE/":"")+nomFichier,"ok"); return 1; }
   const l2=J.ligne("⏳ Décompression…");
   const dceDir=await dossier.getDirectoryHandle("DCE",{create:true});
   let n=0;
@@ -1670,8 +1693,9 @@ async function ecrireDceLocal(dossier,nom,blob,nomFichier,type,J,dansDce){
     }
   };
   try{ await deziper(blob,dceDir,0); l2.textContent="✓ DCE dézippé : "+n+" fichiers dans « "+nom+"/DCE »"; l2.className="ok"; }
-  catch(e){ await ecrireFichier(dossier,nomFichier,blob); l2.textContent="Archive non lisible ("+(e.message||e)+"), le fichier « "+nomFichier+" » est enregistré tel quel."; l2.className="ko"; }
+  catch(e){ await ecrireFichier(dossier,nomFichier,blob); l2.textContent="Archive non lisible ("+(e.message||e)+"), le fichier « "+nomFichier+" » est enregistré tel quel."; l2.className="ko"; n=1; }
   J.ligne("OneDrive va synchroniser le dossier automatiquement.");
+  return n;
 }
 
 /* ---------- DCE téléchargé à la main ----------
@@ -1733,6 +1757,7 @@ async function rangerDceFichiers(m,fichiers){
           if(!rf.ok){ l2.textContent="✗ « "+f.name+" » : "+(d.message||"erreur "+rf.status); l2.className="ko"; continue; }
           l2.textContent="✓ « "+f.name+" » : "+d.fichiers+" fichier"+(d.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(d.total>d.fichiers?" ("+(d.total-d.fichiers)+" en échec)":"");
           l2.className=d.total>d.fichiers?"ko":"ok";
+          if(d.fichiers) marquerDce(m,d.fichiers,"OneDrive");
         }catch(e){ l2.textContent="✗ Le serveur ne répond pas ("+e.message+"). Réessayez dans une minute."; l2.className="ko"; }
       }
       if(r.webUrl) J.ligne("").append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir le dossier dans OneDrive"));
@@ -1745,7 +1770,9 @@ async function rangerDceFichiers(m,fichiers){
     const dossier=await racine.getDirectoryHandle(nom,{create:true});
     for(const sd of ["01_Analyse","02_Candidature","03_Offre","04_Contrôle"]){ try{ await dossier.getDirectoryHandle(sd,{create:true}); }catch(e){ await dossier.getDirectoryHandle(sd.normalize("NFD").replace(/[\u0300-\u036f]/g,""),{create:true}); } }
     J.ligne("✓ Dossier « "+nom+" » dans « "+racine.name+" »","ok");
-    for(const f of fichiers) await ecrireDceLocal(dossier,nom,f,propre(f.name)||"DCE.zip",f.type||"",J,true);
+    let total=0;
+    for(const f of fichiers) total+=(await ecrireDceLocal(dossier,nom,f,propre(f.name)||"DCE.zip",f.type||"",J,true))||0;
+    if(total) marquerDce(m,total,"dossier du PC");
   }catch(e){
     J.ligne("✗ Erreur : "+(e.message||e)+(e.name==="NotAllowedError"?" (autorisation refusée sur le dossier)":""),"ko");
   }finally{ rangementEnCours=false; }
@@ -1790,6 +1817,7 @@ async function preparerEnLigne(m,od){
     }
     if(r.webUrl){ l.textContent="✓ Dossier « "+nom+" » créé dans « "+od.nom+" », avec Analyse, Candidature, Offre et Contrôle "; l.className="ok"; l.append(el("a",{href:r.webUrl,target:"_blank",rel:"noopener"},"Ouvrir dans OneDrive")); }
     if(!rep.ok){ (r.webUrl?J.ligne(""):l).textContent="✗ "+(r.message||"Erreur "+rep.status); if(!r.webUrl) l.className="ko"; return; }
+    if(r.dce==="ok"&&r.fichiers) marquerDce(m,r.fichiers,"OneDrive");
     if(r.dce==="ok") J.ligne("✓ DCE dézippé : "+r.fichiers+" fichier"+(r.fichiers>1?"s":"")+" dans le sous-dossier DCE"+(r.total>r.fichiers?" ("+(r.total-r.fichiers)+" en échec)":""),r.total>r.fichiers?"ko":"ok");
     else{
       const liens=r.dce==="introuvable"&&r.lienDce?{lien:r.lienDce,consultation:""}:await lienDirectDce(m,atx,r), lien=liens.lien;
@@ -2326,7 +2354,7 @@ function snapshot(m){ const {idweb,objet,acheteur,parution,limite,types,deps,des
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
   if(actuel===k){ delete statuts[m.idweb]; toast("Statut retiré"); }
-  else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m)}; toast("« "+LIB_STATUT[k]+" » enregistré"); if(k==="reponse") preparerDossier(m).finally(()=>synchroTableau(false)); }
+  else{ statuts[m.idweb]={statut:k,date:new Date().toISOString(),m:snapshot(m),...(statuts[m.idweb]&&statuts[m.idweb].dce?{dce:statuts[m.idweb].dce}:{})}; toast("« "+LIB_STATUT[k]+" » enregistré"); if(k==="reponse") preparerDossier(m).finally(()=>synchroTableau(false)); }
   if(!ecrire(CLE_STATUTS,statuts)) toast("Attention : ce navigateur bloque l'enregistrement local");
   document.querySelectorAll('.carte[data-id="'+CSS.escape(m.idweb)+'"]').forEach(c=>c.replaceWith(carte(m)));
   majCompteSuivis(); afficherRappels();
