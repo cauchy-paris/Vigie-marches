@@ -137,11 +137,117 @@ function erreurRobot() {
   e.robot = true; return e;
 }
 
+
+/* ---------- AWS-Achat, e-marchespublics : retrait anonyme avec code image ----------
+   Ces plateformes donnent le DCE sans compte, mais demandent de recopier un code (image).
+   Le serveur suit le parcours anonyme comme un navigateur, renvoie l'image à Vigie, puis reprend
+   avec le code tapé par l'utilisateur jusqu'au fichier. Les pages après le code ne sont pas connues
+   à l'avance : chaque étape est choisie d'après la page (lien « anonyme », formulaire à code,
+   lien de téléchargement, formulaire de lots à valider). Trace détaillée via /diagnostic?url=… */
+const HOTES_CODE = [/(^|\.)marches-publics\.info$/, /(^|\.)e-marchespublics\.com$/];
+const hoteCode = h => HOTES_CODE.some(re => re.test(h)) || (process.env.HOTE_TEST && h === process.env.HOTE_TEST);
+function formulaires(html, base) {
+  const r = [];
+  for (const m of html.matchAll(/<form\b([^>]*)>([\s\S]*?)<\/form>/gi)) {
+    const ouv = "<form" + m[1] + ">";
+    let action = attr(ouv, "action") || base;
+    try { action = new URL(action, base).toString(); } catch (e) { continue; }
+    r.push({ action, methode: (attr(ouv, "method") || "get").toLowerCase(), html: m[2] });
+  }
+  return r;
+}
+function liens(html, base) {
+  const r = [];
+  for (const m of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const href = attr("<a" + m[1] + ">", "href");
+    if (!href || /^(javascript:|mailto:|#)/i.test(href)) continue;
+    let url; try { url = new URL(href, base).toString(); } catch (e) { continue; }
+    r.push({ url, texte: decode(m[2].replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim() });
+  }
+  return r;
+}
+const RE_CONNEXION = /password|mot_?de_?passe|motdepasse|login|identifiant|pwd/i;
+function donneesFormulaire(f, toutCocher) {
+  const d = new URLSearchParams();
+  for (const c of champs(f.html)) {
+    if (!c.name || c.tag !== "input") continue;
+    if (/^(submit|button|image|file|reset)$/.test(c.type)) continue;
+    if (c.type === "checkbox") { if (c.checked || toutCocher) d.append(c.name, c.value || "on"); continue; }
+    if (c.type === "radio") { if (c.checked) d.set(c.name, c.value || "on"); continue; }
+    d.append(c.name, c.value || "");
+  }
+  for (const m of f.html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/gi)) {
+    const nom = attr("<select" + m[1] + ">", "name"); if (!nom) continue;
+    const opts = [...m[2].matchAll(/<option\b([^>]*)>/gi)].map(o => ({ v: attr("<option" + o[1] + ">", "value") || "", sel: /\sselected\b/i.test(o[1]) }));
+    const o = opts.find(x => x.sel) || opts[0]; if (o) d.set(nom, o.v);
+  }
+  // bouton de validation nommé (certains serveurs s'en servent pour savoir quelle action est demandée)
+  const b = champs(f.html).find(c => c.name && /^(submit|image)$/.test(c.type) && /retrait|t[ée]l[ée]charg|valider|continuer|suivant|anonyme|ok/i.test((c.value || "") + c.name));
+  if (b) d.set(b.name, b.value || "");
+  return d;
+}
+async function telechargerParCode(depart, reprise) {
+  let jar, url, html, code = null, vus;
+  if (reprise) {
+    const r = captchas.get(String(reprise.jeton || ""));
+    if (!r || r.expire < Date.now()) throw new Error("Le code a expiré, relancez le téléchargement");
+    captchas.delete(String(reprise.jeton));
+    ({ jar, url, html, vus } = r.etat); depart = r.base;
+    code = String(reprise.code || "").trim().slice(0, 40);
+  } else {
+    jar = new Map(); vus = [];
+    const r0 = await requete(depart, jar);
+    if (!/text\/html/i.test(r0.rep.headers.get("content-type") || "")) { r0.rep.consultation = { base: depart, id: "", org: "" }; return r0.rep; }
+    url = r0.url; html = await r0.rep.text();
+  }
+  let codeEnvoye = false;
+  for (let etape = 0; etape < 10; etape++) {
+    vus.push(url);
+    if (TRACE) TRACE.push({ etape: "code-" + etape, url, titre: (html.match(/<title>([^<]*)/i) || [])[1], formulaires: formulaires(html, url).map(f => [f.methode, f.action.slice(0, 120), champs(f.html).map(c => c.type + ":" + (c.name || c.id)).join(",").slice(0, 300)]), liens: liens(html, url).filter(l => /dce|anonym|t[ée]l[ée]charg|zip|retrait|dossier/i.test(l.url + " " + l.texte)).map(l => l.texte.slice(0, 40) + " | " + l.url.slice(0, 140)).slice(0, 15), extrait: html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 600) });
+    if (RE_ROBOT.test(html) && !captchaImage(html, url)) throw erreurRobot();
+    const fs = formulaires(html, url), ls = liens(html, url);
+    let suivant = null; // { url, methode, corps }
+    // 1. lien vers le retrait anonyme
+    const anonyme = ls.find(l => !vus.includes(l.url) && (/anonym/i.test(l.url) || /mode anonyme|de mani[eè]re anonyme|retrait anonyme/i.test(l.texte)) && !/inscri|connexion|login/i.test(l.url));
+    // 2. formulaire avec code image (hors formulaire de connexion)
+    const fCode = fs.find(f => captchaImage(f.html, url) && !champs(f.html).some(c => c.type === "password"));
+    if (anonyme && !(fCode && /anonym/i.test(fCode.action + " " + champs(fCode.html).map(c => c.value || "").join(" ")))) suivant = { url: anonyme.url };
+    else if (fCode) {
+      const cap = captchaImage(fCode.html, url) || captchaImage(html, url);
+      if (code === null) throw await erreurCaptcha({ type: "code", jar, url, html, vus }, cap, depart, "", "", codeEnvoye);
+      const d = donneesFormulaire(fCode, false); d.set(cap.champ, code);
+      suivant = { url: fCode.action, methode: fCode.methode, corps: d };
+      code = null; codeEnvoye = true;
+    } else {
+      // 3. lien direct vers le fichier
+      const fichier = ls.find(l => !vus.includes(l.url) && (/\.(zip|rar|7z)(\?|$)/i.test(l.url) || /(download|telecharg|getfile|fichier)/i.test(l.url) && /dce|zip|dossier|tout|complet|t[ée]l[ée]charg/i.test(l.texte + l.url)) && !/reglement|\brc\b|avis/i.test(l.texte));
+      // 4. formulaire à valider (choix des lots, conditions), jamais connexion ni recherche
+      const fSuite = fs.find(f => !champs(f.html).some(c => c.type === "password" || RE_CONNEXION.test(c.name || "")) && !/recherche|search|keyword/i.test(f.action + " " + champs(f.html).map(c => c.name).join(" ")) && champs(f.html).some(c => /^(submit|image)$/.test(c.type) || c.tag === "button"));
+      if (fichier) suivant = { url: fichier.url };
+      else if (fSuite) suivant = { url: fSuite.action, methode: fSuite.methode, corps: donneesFormulaire(fSuite, true) };
+    }
+    if (!suivant) throw new Error(codeEnvoye ? "Code accepté, mais lien de téléchargement du DCE non trouvé sur la page suivante" : "Page de retrait anonyme non reconnue");
+    let r;
+    if (suivant.methode === "post") r = await requete(suivant.url, jar, { method: "POST", body: suivant.corps, headers: { "Content-Type": "application/x-www-form-urlencoded", Referer: url } });
+    else { let cible = suivant.url; if (suivant.corps) { const x = new URL(cible); for (const [k, v] of suivant.corps) x.searchParams.append(k, v); cible = x.toString(); } r = await requete(cible, jar, { headers: { Referer: url } }); }
+    const type = r.rep.headers.get("content-type") || "", cd = r.rep.headers.get("content-disposition") || "";
+    if (!/text\/html/i.test(type) || /attachment/i.test(cd)) { r.rep.consultation = { base: depart, id: "", org: "" }; return r.rep; }
+    url = r.url; html = await r.rep.text();
+    // code refusé : la plateforme réaffiche un formulaire à code
+    if (codeEnvoye && formulaires(html, url).some(f => captchaImage(f.html, url) && !champs(f.html).some(c => c.type === "password")) && /incorrect|invalide|erron|ne correspond|mauvais/i.test(html)) {
+      const f = formulaires(html, url).find(x => captchaImage(x.html, url));
+      throw await erreurCaptcha({ type: "code", jar, url, html, vus }, captchaImage(f.html, url), depart, "", "", true);
+    }
+  }
+  throw new Error("Parcours de retrait trop long");
+}
+
 // Parcours de retrait du DCE. `reprise` = { jeton, code } quand l'utilisateur vient de taper le CAPTCHA.
 async function telechargerDce(origine, id, org, reprise) {
   let etat, code = null;
   if (reprise) {
     const r = captchas.get(String(reprise.jeton || ""));
+    if (r && r.etat && r.etat.type === "code") return telechargerParCode(null, reprise);
     if (!r || r.expire < Date.now()) throw new Error("Le code CAPTCHA a expiré, relancez le téléchargement");
     captchas.delete(String(reprise.jeton));
     ({ etat } = r); origine = r.base; id = r.id; org = r.org;
@@ -429,6 +535,24 @@ async function routeOneDrive(req, res, u) {
     // le DCE, si la plateforme permet le retrait anonyme
     const origine = String(c.origine || "");
     const reprise = c.jeton ? { jeton: String(c.jeton), code: String(c.code || "") } : null;
+    // AWS-Achat, e-marchespublics : retrait anonyme avec code image
+    const enAttente = reprise && captchas.get(reprise.jeton);
+    let pageCode = null;
+    if (c.url && !reprise) { try { const x = new URL(String(c.url)); if (x.protocol === "https:" && hoteCode(x.hostname)) pageCode = x.toString(); } catch (e) {} }
+    if (pageCode || (enAttente && enAttente.etat && enAttente.etat.type === "code")) {
+      const lien = pageCode || enAttente.base;
+      r.lienDce = lien;
+      let rep;
+      try { rep = await telechargerParCode(lien, reprise); } catch (e) { r.dce = e.captcha ? "captcha" : e.robot ? "robot" : "echec"; r.message = e.message; if (e.captcha) r.captcha = e.captcha; return json(res, 200, r, autorise); }
+      const taille = Number(rep.headers.get("content-length") || 0);
+      if (taille > 300e6) { try { await rep.body.cancel(); } catch (e) {} r.dce = "trop_gros"; return json(res, 200, r, autorise); }
+      const buf = Buffer.from(await rep.arrayBuffer());
+      const cd = rep.headers.get("content-disposition") || "";
+      const nomArchive = (cd.match(/filename="?([^";]+)/i) || [])[1] || "DCE.zip";
+      Object.assign(r, await onedrive.deposerDce(token, driveId, dossier.id, nomArchive, buf), { dce: "ok", taille: buf.length });
+      console.log(new Date().toISOString(), "ONEDRIVE OK (code)", new URL(lien).hostname, r.fichiers + "/" + r.total);
+      return json(res, 200, r, autorise);
+    }
     if (!origine && !reprise) { r.dce = "absent"; return json(res, 200, r, autorise); }
     let base;
     if (reprise) { const p = captchas.get(reprise.jeton); base = p ? new URL(p.base) : null; c.id = p ? p.id : ""; c.org = p ? p.org : ""; if (!base) { r.dce = "echec"; r.message = "Le code CAPTCHA a expiré, relancez « Dossier de réponse »"; return json(res, 200, r, autorise); } }
@@ -528,10 +652,10 @@ async function routeCaptcha(req, res) {
   let p;
   try { p = /json/i.test(req.headers["content-type"] || "") ? JSON.parse(brut) : Object.fromEntries(new URLSearchParams(brut)); } catch (e) { p = {}; }
   const enAttente = captchas.get(String(p.jeton || ""));
-  const lienDce = enAttente ? enAttente.base + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + enAttente.id + "&orgAcronyme=" + enAttente.org : "";
+  const lienDce = !enAttente ? "" : enAttente.etat && enAttente.etat.type === "code" ? enAttente.base : enAttente.base + "/index.php?page=Entreprise.EntrepriseDemandeTelechargementDce&id=" + enAttente.id + "&orgAcronyme=" + enAttente.org;
   try {
     const rep = await telechargerDce(null, null, null, { jeton: p.jeton, code: p.code });
-    await envoyerFichier(res, rep, rep.consultation.id);
+    await envoyerFichier(res, rep, rep.consultation.id || "consultation");
     console.log(new Date().toISOString(), "DCE OK (captcha)", rep.consultation.base, rep.consultation.id);
   } catch (e) {
     console.log(new Date().toISOString(), "DCE ECHEC (captcha)", e.message);
@@ -703,6 +827,20 @@ http.createServer(async (req, res) => {
   if (u.pathname === "/mail/imap") return routeMailImap(req, res).catch(e => { console.log("mail", e.code || "erreur"); if (!res.headersSent) json(res, 500, { ok: false, message: "Erreur interne" }); });
   if (u.pathname === "/fiche") return routeFiche(req, res, u).catch(e => { console.log("fiche", e.message); if (!res.headersSent) json(res, 200, { ok: false, message: "Page illisible ou plateforme injoignable (" + e.message + ") : complétez à la main." }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
+  if (u.pathname === "/diagnostic" && u.searchParams.get("url")) {
+    TRACE = [];
+    let resultat;
+    try {
+      const x = new URL(u.searchParams.get("url"));
+      if (x.protocol !== "https:" || !hoteCode(x.hostname)) throw new Error("plateforme refusée");
+      const r = await telechargerParCode(x.toString());
+      resultat = { ok: true, type: r.headers.get("content-type"), disposition: r.headers.get("content-disposition") };
+      try { await r.body.cancel(); } catch (e) {}
+    } catch (e) { resultat = { ok: false, erreur: e.message, captcha: e.captcha ? e.captcha.jeton : undefined }; }
+    const t = TRACE; TRACE = null;
+    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+    return res.end(JSON.stringify({ resultat, trace: t }, null, 1));
+  }
   if (u.pathname === "/diagnostic") {
     TRACE = [];
     const o = u.searchParams.get("origine") || "";
@@ -733,6 +871,21 @@ http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ resultat, trace: t }, null, 1));
   }
   if (u.pathname !== "/dce") { res.writeHead(404); return res.end("Introuvable"); }
+
+  if (u.searchParams.get("url")) {
+    let page;
+    try { const x = new URL(u.searchParams.get("url")); if (x.protocol !== "https:" && !process.env.HOTE_TEST) throw 0; if (!hoteCode(x.hostname)) throw 0; page = x.toString(); } catch (e) { return pageErreur(res, 400, "Cette plateforme n'est pas prise en charge pour le téléchargement automatique."); }
+    if (tropDeDemandes(ip)) return pageErreur(res, 429, "Trop de téléchargements en peu de temps. Réessayez dans quelques minutes.", page);
+    try {
+      const rep = await telechargerParCode(page);
+      await envoyerFichier(res, rep, "consultation");
+      console.log(new Date().toISOString(), "DCE OK (code)", new URL(page).hostname);
+    } catch (e) {
+      console.log(new Date().toISOString(), "DCE ECHEC (code)", new URL(page).hostname, e.message);
+      if (!res.headersSent) echecDce(req, res, e, page); else res.end();
+    }
+    return;
+  }
 
   const origine = u.searchParams.get("origine") || "";
   let id = u.searchParams.get("id") || "";

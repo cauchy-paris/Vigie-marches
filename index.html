@@ -1429,6 +1429,15 @@ async function dceServeurAvecCaptcha(url,J){
   return rep;
 }
 
+/* AWS-Achat et e-marchespublics : retrait anonyme avec un code image, fait par le serveur Vigie
+   (le code s'affiche dans Vigie, l'utilisateur le recopie, le serveur télécharge le DCE). */
+const HOTES_CODE=/(^|\.)(marches-publics\.info|e-marchespublics\.com)$/i;
+function pageACode(m){
+  const cands=[m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])].filter(Boolean).map(u=>String(u).replace(/&amp;/g,"&")).filter(u=>{ try{ const x=new URL(u); return x.protocol==="https:"&&HOTES_CODE.test(x.hostname)&&!estAccueil(u)&&!/demat\.termes/i.test(u); }catch(e){ return false; } });
+  const url=cands.find(u=>/type=DCE|dematEnt|annonce_marche_public|appel-offre|dossier_de_consultation/i.test(u))||cands[0];
+  return url?{url,dceAuto:SERVEUR_DCE+"/dce?url="+encodeURIComponent(url)}:null;
+}
+
 /* ---------- Extension Vigie (sessions des plateformes, Chrome/Edge) ---------- */
 const HOTES_EXT=/(^|\.)(marches-publics\.info|achatpublic\.com|e-marchespublics\.com|marches-securises\.fr|klekoon\.com|local-trust\.com|atexo\.com)$/i;
 function extensionDispo(){ return !!document.documentElement.dataset.vigieExt; }
@@ -1492,6 +1501,25 @@ function majExtension(){
 }
 // Bouton « Télécharger le DCE » : avec l'extension, retrait par la session de l'utilisateur
 async function boutonDce(ev,m,atx,lien){
+  const pc=!atx&&pageACode(m);
+  if(pc){
+    ev.preventDefault();
+    const J=journal("Téléchargement du DCE");
+    const l=J.ligne("⏳ Téléchargement du DCE… (jusqu'à une minute si le serveur était en veille)");
+    let rep=null; try{ rep=await dceServeurAvecCaptcha(pc.dceAuto,J); }catch(e){}
+    const type=(rep&&rep.headers.get("content-type"))||"";
+    if(!rep||!rep.ok||/text\/html|json/i.test(type)){
+      const r=rep?await rep.clone().json().catch(()=>({})):{};
+      l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement"+(r.message?" ("+r.message+")":rep?"":" (serveur injoignable)")+"."; l.className="ko";
+      etapesManuelles(J,m,pc.url); return;
+    }
+    const cd=rep.headers.get("content-disposition")||"";
+    const nom=propre(decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i)||[])[1]||"")||(cd.match(/filename="?([^";]+)/i)||[])[1]||"")||"DCE.zip";
+    const blob=await rep.blob();
+    const a=el("a",{href:URL.createObjectURL(blob),download:nom}); document.body.append(a); a.click(); a.remove();
+    l.textContent="✓ DCE téléchargé ("+(blob.size/1048576).toFixed(1).replace(".",",")+" Mo) : « "+nom+" » est dans vos Téléchargements"; l.className="ok";
+    return;
+  }
   if(!extensionDispo()||!atx) return; // lien normal (serveur Vigie, qui gère aussi le CAPTCHA)
   ev.preventDefault();
   const J=journal("Téléchargement du DCE");
@@ -1576,7 +1604,8 @@ async function preparerDossier(m){
     // le DCE
     let atx=null; for(const u of [m.urlDocs,m.urlDepot,m.urlProfil,...(m.urls||[])]){ atx=atexoLiens(u); if(atx) break; }
     if(!atx) atx=atexoParRecherche(m);
-    if(!atx&&!extensionDispo()){
+    const pc=!atx&&pageACode(m);
+    if(!atx&&!pc&&!extensionDispo()){
       J.ligne("Cette plateforme demande un code de vérification ou un compte : Vigie ne peut pas télécharger le DCE tout seul.","ko");
       const liens=await lienDirectDce(m,null);
       etapesManuelles(J,m,liens.lien);
@@ -1584,16 +1613,16 @@ async function preparerDossier(m){
       return;
     }
     // 1. avec l'extension Vigie : session de l'utilisateur sur la plateforme
-    const parExt=await dceParExtension(m,atx,J);
+    const parExt=pc?null:await dceParExtension(m,atx,J);
     let blob, nomFichier, type;
     if(parExt&&parExt.blob){ blob=parExt.blob; nomFichier=propre(parExt.nom)||"DCE.zip"; type=parExt.type||""; }
     else{
-      if(!atx){ const liens=await lienDirectDce(m,null); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,parExt&&parExt.telecharge?"DCE dans le dossier Téléchargements":"plateforme sans retrait anonyme",J); return; }
+      if(!atx&&!pc){ const liens=await lienDirectDce(m,null); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,parExt&&parExt.telecharge?"DCE dans le dossier Téléchargements":"plateforme sans retrait anonyme",J); return; }
       // 2. par le serveur Vigie (retrait anonyme), avec CAPTCHA si besoin
       const l=J.ligne("⏳ Téléchargement du DCE… (jusqu'à une minute si le serveur était en veille)");
-      let rep=null; try{ rep=await dceServeurAvecCaptcha(atx.dceAuto,J); }catch(e){}
+      let rep=null; try{ rep=await dceServeurAvecCaptcha((atx||pc).dceAuto,J); }catch(e){}
       type=(rep&&rep.headers.get("content-type"))||"";
-      if(!rep||!rep.ok||/text\/html|json/i.test(type)){ l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement."; l.className="ko"; const liens=await lienDirectDce(m,atx); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,rep?"":"serveur injoignable",J); return; }
+      if(!rep||!rep.ok||/text\/html|json/i.test(type)){ const r=rep?await rep.clone().json().catch(()=>({})):{}; l.textContent="✗ Le DCE n'a pas pu être téléchargé automatiquement"+(r.message?" ("+r.message+")":"")+"."; l.className="ko"; const liens=pc?{lien:pc.url,consultation:""}:await lienDirectDce(m,atx); etapesManuelles(J,m,liens.lien); await deposerRaccourciLocal(dossier,m,liens,rep?"":"serveur injoignable",J); return; }
       const cd=rep.headers.get("content-disposition")||"";
       nomFichier=decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i)||[])[1]||"")||(cd.match(/filename="?([^";]+)/i)||[])[1]||"DCE.zip";
       nomFichier=propre(nomFichier)||"DCE.zip";
@@ -1731,10 +1760,12 @@ async function preparerEnLigne(m,od){
   if(!atx) atx=atexoParRecherche(m);
   const params={};
   if(atx&&atx.dceAuto){ try{ new URL(atx.dceAuto).searchParams.forEach((v,k)=>{ if(k!=="quoi") params[k]=v; }); }catch(e){} }
+  const pc=!atx&&pageACode(m);
+  if(pc) params.url=pc.url;
   // DCE récupéré d'abord avec l'extension Vigie (session de l'utilisateur), sinon par le serveur
-  const parExt=await dceParExtension(m,atx,J);
+  const parExt=pc?null:await dceParExtension(m,atx,J);
   const fichierExt=parExt&&parExt.blob?parExt:null;
-  const l=J.ligne("⏳ Création du dossier « "+nom+" »"+(params.origine||fichierExt?" et dépôt du DCE (1 à 3 minutes, vous pouvez continuer à naviguer)":"")+"…");
+  const l=J.ligne("⏳ Création du dossier « "+nom+" »"+(params.origine||params.url||fichierExt?" et dépôt du DCE (1 à 3 minutes, vous pouvez continuer à naviguer)":"")+"…");
   try{
     const envoi=extra=>fetch(SERVEUR_DCE+"/onedrive",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+jeton},body:JSON.stringify({driveId:od.driveId,parentId:od.id,dossier:nom,...(fichierExt?{}:params),...extra})});
     let rep=await envoi({});
