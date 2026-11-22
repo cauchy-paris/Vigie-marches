@@ -604,8 +604,8 @@ input[type=text]:focus,input[type=search]:focus,select:focus{border-color:var(--
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="comptes.js"></script>
-<script src="synchro.js"></script>
+<script src="comptes.js?v=20261122b"></script>
+<script src="synchro.js?v=20261122b"></script>
 <script>
 "use strict";
 /* ====================================================================
@@ -2481,11 +2481,18 @@ function ouvrirOneDrive(){
   const bLien=el("button",{class:"btn btn-plein",type:"button"},"Enregistrer ce dossier");
   const aOuvrir=el("a",{class:"btn",target:"_blank",rel:"noopener",hidden:true},"Ouvrir le dossier");
   const bPc=el("button",{class:"btn",type:"button"},"Choisir le dossier du PC");
+  const bDeco=el("button",{class:"btn btn-rouge",type:"button",hidden:true},"Se déconnecter de Microsoft");
+  const avert=el("p",{class:"pn-etat ko",hidden:true});
+  const bZero=el("button",{class:"btn btn-rouge",type:"button",title:"Efface de cet appareil les marchés, statuts, connexions drive et mail de votre compte Vigie"},"Repartir de zéro sur cet appareil");
   async function maj(){
     await msInit().catch(()=>null);
     const c=msCompte(), od=lire(CLE_OD,null);
     etatCompte.className="pn-etat "+(c?"ok":""); etatCompte.textContent=c?"✓ Connecté avec "+(c.username||c.name):"Pas encore connecté.";
     bCompte.textContent=c?"Changer de compte":"Se connecter à Microsoft";
+    bDeco.hidden=!c;
+    const moi=(window.Comptes&&Comptes.session()&&Comptes.session().compte&&Comptes.session().compte.email||"").toLowerCase();
+    avert.hidden=!(c&&moi&&String(c.username||"").toLowerCase()!==moi);
+    if(!avert.hidden) avert.textContent="Attention : ce compte Microsoft n'est pas celui de votre compte Vigie ("+moi+"). S'il ne vous appartient pas, cliquez « Se déconnecter de Microsoft ».";
     bCompte.classList.toggle("btn-plein",!c);
     lien.disabled=bLien.disabled=!c;
     if(od&&!lien.value) lien.value=od.lien||"";
@@ -2496,6 +2503,16 @@ function ouvrirOneDrive(){
     majMs();
   }
   bCompte.onclick=async()=>{ if(await msConnecter()) maj(); };
+  bDeco.onclick=async()=>{
+    if(!confirm("Se déconnecter de Microsoft sur cet appareil et oublier le dossier OneDrive enregistré ?")) return;
+    try{ for(let i=localStorage.length-1;i>=0;i--){ const k=localStorage.key(i); if(k&&/^msal\.|login\.(windows\.net|microsoftonline\.com)|6b6c5506-bb5e-48d4-a594-eca34bf48837/i.test(k)) localStorage.removeItem(k); } }catch(e){}
+    localStorage.removeItem(CLE_OD);
+    location.reload();
+  };
+  bZero.onclick=async()=>{
+    if(!confirm("Repartir de zéro sur cet appareil ?\nLes marchés, statuts, connexion Microsoft, dossier des réponses et boîte mail enregistrés ici seront effacés de cet appareil.")) return;
+    if(window.Comptes&&Comptes.repartirDeZero) await Comptes.repartirDeZero(); else { localStorage.clear(); location.reload(); }
+  };
   bLien.onclick=async()=>{ bLien.disabled=true; try{ if(await enregistrerLienOd(lien.value)) maj(); }catch(e){ toast(e.message); } finally{ bLien.disabled=false; } };
   lien.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); bLien.click(); } });
   bPc.onclick=async()=>{ try{ await dossierRacine(true); toast("Dossier du PC enregistré"); maj(); }catch(e){} };
@@ -2505,13 +2522,13 @@ function ouvrirOneDrive(){
     el("div",{class:"ligne"},el("a",{href:"aide/connexions.html#drive",target:"_blank",rel:"noopener",class:"btn"},"Procédure pas à pas"),el("a",{href:"aide/connexions.html",download:"Vigie - connecter son drive et sa messagerie.html",class:"btn"},"Télécharger la procédure")),
     msConfigure()?el("div",{class:"bloc"},
       el("h4",{text:"OneDrive ou SharePoint (Microsoft 365) — PC, téléphone, tablette"}),
-      el("p",{class:"note",text:"1. Connectez votre compte Microsoft."}), etatCompte, el("div",{class:"ligne"},bCompte),
+      el("p",{class:"note",text:"1. Connectez votre compte Microsoft."}), etatCompte, avert, el("div",{class:"ligne"},bCompte,bDeco),
       el("p",{class:"note",text:"2. Collez le lien de partage du dossier où ranger les réponses."}), etatDossier, el("div",{class:"ligne"},lien,bLien,aOuvrir)):null,
     el("div",{class:"bloc"},
       el("h4",{text:"Google Drive, Dropbox, iCloud, OneDrive ou serveur — dossier synchronisé sur ce PC"}),
       el("p",{class:"note",text:"Installez l'application de votre drive sur le PC (Google Drive pour ordinateur, Dropbox…), puis choisissez ici le dossier des réponses : le drive le synchronise tout seul. Chrome ou Edge sur PC."}),
       etatPc, el("div",{class:"ligne"},bPc)),
-    el("div",{class:"actions"},el("button",{class:"btn",type:"button",onclick:fermer},"Fermer")));
+    el("div",{class:"actions",style:"justify-content:space-between"},bZero,el("button",{class:"btn",type:"button",onclick:fermer},"Fermer")));
   const fond=el("div",{class:"captcha-fond"},boite);
   fond.addEventListener("click",e=>{ if(e.target===fond) fermer(); });
   document.addEventListener("keydown",echap);
@@ -2983,7 +3000,7 @@ function ouvrirImportMail(){
       el("div",{class:"ligne"},iType,iAdr),
       el("div",{class:"ligne"},iHote,iMdp),
       el("label",{class:"note",style:"display:flex;gap:6px;align-items:center"},iSouv,"Se souvenir du mot de passe (gardé chiffré, retrouvé sur vos autres appareils connectés à Microsoft)"),
-      el("div",{class:"ligne"},bImap),
+      el("div",{class:"ligne"},bImap,el("button",{class:"btn btn-rouge",type:"button",onclick:()=>{ if(!confirm("Effacer l'adresse et le mot de passe de messagerie enregistrés sur cet appareil ?")) return; localStorage.removeItem(CLE_IMAP); iAdr.value=""; iMdp.value=""; iSouv.checked=false; iType.value="gmail"; majType(); dire("Réglages de messagerie effacés.","ok"); }},"Effacer ces réglages")),
       el("p",{class:"note",text:"Gmail, Yahoo et iCloud demandent un « mot de passe d'application » (pas votre mot de passe habituel) : voir la procédure pas à pas. Le serveur Vigie lit la boîte en lecture seule et ne garde ni le mot de passe ni les mails."})),
     el("div",{class:"bloc"},
       el("h4",{text:"Ou : copier-coller d'un mail d'alerte"}),

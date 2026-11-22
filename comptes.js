@@ -317,11 +317,47 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
      (marchés, statuts, drive, boîte mail, connexion Microsoft, dossier du PC) sont mises de côté
      dans IndexedDB et le nouveau compte démarre vierge ; elles reviennent quand ce compte se reconnecte. */
   const PROPRIO = "vigie.proprietaire.v1";
-  const GARDEES = new Set([CLE, PROPRIO]);
+  const GARDEES = new Set([CLE, PROPRIO, "vigie.espaces.v2"]);
   const estDuCompte = k => (/^vigie\./.test(k) && !GARDEES.has(k))
     || /^msal\.|login\.(windows\.net|microsoftonline\.com)|6b6c5506-bb5e-48d4-a594-eca34bf48837/i.test(k);
   function idb() { return new Promise((ok, ko) => { const r = indexedDB.open("vigie", 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); }); }
   async function idbFaire(mode, f) { const db = await idb(); return new Promise((ok, ko) => { const t = db.transaction("kv", mode); const s = t.objectStore("kv"); let res; const r = f(s); if (r) r.onsuccess = () => { res = r.result; }; t.oncomplete = () => ok(res); t.onerror = () => ko(t.error); }); }
+  // range les données présentes sous le nom d'un compte, puis les efface de l'appareil
+  async function ranger(proprio) {
+    const ls = window.localStorage;
+    const cles = []; for (let i = 0; i < ls.length; i++) { const k = ls.key(i); if (k && estDuCompte(k)) cles.push(k); }
+    const local = {}; cles.forEach(k => { local[k] = ls.getItem(k); });
+    let racine = null; try { racine = await idbFaire("readonly", s => s.get("racine")); } catch (e) {}
+    let deja = null; try { deja = await idbFaire("readonly", s => s.get("espace:" + proprio)); } catch (e) {}
+    if (!deja && !proprio.startsWith("efface:") && (cles.length || racine)) await idbFaire("readwrite", s => s.put({ local, racine: racine || null, le: new Date().toISOString() }, "espace:" + proprio));
+    cles.forEach(k => ls.removeItem(k));
+    try { await idbFaire("readwrite", s => s.delete("racine")); } catch (e) {}
+  }
+  // compte Microsoft mémorisé sur l'appareil (cache MSAL)
+  function utilisateurMicrosoft() {
+    const ls = window.localStorage;
+    try {
+      for (let i = 0; i < ls.length; i++) {
+        const k = ls.key(i); if (!k || !/login\.(windows\.net|microsoftonline\.com)/i.test(k)) continue;
+        const v = JSON.parse(ls.getItem(k) || "null"); if (v && v.username && v.homeAccountId) return String(v.username).toLowerCase();
+      }
+    } catch (e) {}
+    return "";
+  }
+  // vérification unique : réglages laissés par un autre compte avant la séparation des espaces
+  async function verifierHeritage(email) {
+    const ls = window.localStorage, DRAPEAU = "vigie.espaces.v2";
+    if (ls.getItem(DRAPEAU)) return false;
+    try { ls.setItem(DRAPEAU, "1"); } catch (e) {}
+    const autre = utilisateurMicrosoft();
+    if (!autre || autre === email) return false;
+    const od = (() => { try { return JSON.parse(ls.getItem("vigie.onedrive.v1") || "null"); } catch (e) { return null; } })();
+    if (!confirm("Sur cet appareil, Vigie est encore relié au compte Microsoft " + autre + (od && od.nom ? " (dossier « " + od.nom + " »)" : "") +
+      ", qui n'est pas celui de " + email + ".\n\nRepartir de zéro pour " + email + " ?\nLes réglages de " + autre + " sont mis de côté et reviendront quand ce compte se connectera à Vigie.")) return false;
+    await ranger(autre);
+    ls.setItem(PROPRIO, email);
+    return true;
+  }
   async function basculerCompte(email) {
     const ls = window.localStorage;
     let proprio = ls.getItem(PROPRIO);
@@ -329,14 +365,10 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       // première fois : les données présentes appartiennent au dernier compte synchronisé, sinon à celui qui se connecte
       try { const m = JSON.parse(ls.getItem("vigie.synchro.v1") || "null"); proprio = (m && m.compte) || email; } catch (e) { proprio = email; }
     }
-    if (proprio === email) { ls.setItem(PROPRIO, email); return false; }
+    if (proprio === email) { ls.setItem(PROPRIO, email); return verifierHeritage(email); }
+    try { ls.setItem("vigie.espaces.v2", "1"); } catch (e) {}
     // 1) mise de côté des données du compte précédent
-    const cles = []; for (let i = 0; i < ls.length; i++) { const k = ls.key(i); if (k && estDuCompte(k)) cles.push(k); }
-    const local = {}; cles.forEach(k => { local[k] = ls.getItem(k); });
-    let racine = null; try { racine = await idbFaire("readonly", s => s.get("racine")); } catch (e) {}
-    await idbFaire("readwrite", s => s.put({ local, racine: racine || null, le: new Date().toISOString() }, "espace:" + proprio));
-    cles.forEach(k => ls.removeItem(k));
-    try { await idbFaire("readwrite", s => s.delete("racine")); } catch (e) {}
+    await ranger(proprio);
     // 2) retour des données de ce compte s'il s'est déjà servi de cet appareil
     let espace = null; try { espace = await idbFaire("readonly", s => s.get("espace:" + email)); } catch (e) {}
     if (espace) {
@@ -376,5 +408,7 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     rafraichir(); setInterval(rafraichir, 6 * 3600e3);
   }
   window.addEventListener("hashchange", () => { if (/[#&]reinit=/.test(location.hash)) location.reload(); });
-  window.Comptes = { demarrer, deconnecter, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
+  // « Repartir de zéro sur cet appareil » : tout ce compte Vigie redevient vierge ici (son fichier OneDrive de synchronisation reste)
+  async function repartirDeZero() { await ranger("efface:" + Date.now()); location.reload(); }
+  window.Comptes = { demarrer, deconnecter, repartirDeZero, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
 })();
