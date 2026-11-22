@@ -33,7 +33,8 @@ async function preparer(page, dossiers) {
     const ExcelJS = await chargerExcelJS(), wb = new ExcelJS.Workbook(), ws = feuilleNeuve(wb), C = colonnes(ws);
     ["T-1", "T-2", "T-3"].forEach((id, i) => { ws.getCell(i + 2, C.ref).value = id; ws.getCell(i + 2, C.nom).value = statuts[id].m.objet; });
     const w = await (await racine.getFileHandle(NOM_EXCEL, { create: true })).createWritable(); await w.write(await wb.xlsx.writeBuffer()); await w.close();
-    await idbSet("racine", racine);
+    // dossier du PC : le dossier privé, donné directement (relire depuis IndexedDB un dossier privé fait planter le Chromium de la CI)
+    window.idbGet = (orig => async k => k === "racine" ? navigator.storage.getDirectory() : orig(k))(idbGet);
     return sortie;
   }, dossiers);
   await page.click('.onglet[data-vue="suivi"]');
