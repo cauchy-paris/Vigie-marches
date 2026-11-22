@@ -57,7 +57,7 @@ test("pas de doublon, attribution par l'administratrice, offre déposée, récap
   const lea = await navigateur(browser, "lea@a.fr", erreurs);
   await carte(lea).locator("button.statut[data-s=reponse]").click();
   await expect(carte(lea).locator(".badge.equipe")).toHaveText("👤 Vous");
-  await expect(carte(lea).locator("button:has-text('Offre déposée')")).toBeVisible();
+  await expect(carte(lea).locator("button.btn-statut")).toHaveText("Statut offre");
 
   // Marc voit que Léa a pris le marché et ne peut pas le prendre
   const marc = await navigateur(browser, "marc@a.fr", erreurs);
@@ -82,7 +82,8 @@ test("pas de doublon, attribution par l'administratrice, offre déposée, récap
   await marc.reload();
   await expect(carte(marc).locator(".badge.equipe")).toHaveText("👤 Vous");
   await expect(marc.locator("#nbSuivis")).toHaveText("1");
-  await carte(marc).locator("button:has-text('Offre déposée')").click();
+  await carte(marc).locator("button.btn-statut").click();
+  await expect(carte(marc).locator("button.btn-statut.fait.vert")).toContainText("✓ Offre déposée le ");
   await expect(carte(marc).locator(".badge.equipe")).toContainText("👤 Vous · Déposée le ");
   await expect(carte(marc).locator(".responsable")).toContainText("Responsable de l'offre");
   await expect(carte(marc).locator(".responsable-nom")).toHaveText("Marc (vous)");
@@ -113,5 +114,11 @@ test("pas de doublon, attribution par l'administratrice, offre déposée, récap
   const depot = ws.getRow(2).getCell(6);
   expect(depot.value instanceof Date && depot.value.toISOString().slice(0, 10)).toBe("2026-11-20");
   expect(depot.numFmt).toBe("dd/mm/yyyy");
+
+  // le statut se modifie ensuite avec la liste déroulante
+  await Promise.all([marc.waitForResponse(r => r.url().includes("/equipe/etape")), carte(marc).locator('select[aria-label="Étape de l\'offre"]').selectOption("gagne")]);
+  await expect(carte(marc).locator("button.btn-statut.fait.vert")).toContainText("Offre gagnée");
+  await Promise.all([marc.waitForResponse(r => r.url().includes("/equipe/etape")), carte(marc).locator('select[aria-label="Étape de l\'offre"]').selectOption("perdu")]);
+  await expect(carte(marc).locator("button.btn-statut.fait.rouge")).toContainText("Offre perdue");
   expect(erreurs).toEqual([]);
 });

@@ -42,8 +42,9 @@ function ligneSuiviOffre(m){
   const dd=el("input",{type:"date","aria-label":"Date de dépôt de l'offre",value:res.dateDepot||aujourdhuiIso(),max:aujourdhuiIso()});
   const champDepot=el("label",{class:"date-depot",hidden:!ETAPES_DEPOSEES.includes(res.etape)},"Date de dépôt",dd);
   const sauver=()=>{ majResultat(m.idweb,{etape:sel.value,montant:nombre(mt.value)||null,...(ETAPES_DEPOSEES.includes(sel.value)?{dateDepot:dd.value||aujourdhuiIso()}:{}),m:resumeMarche(m)}); ligne.className="suivi-offre etape-"+sel.value; champDepot.hidden=!ETAPES_DEPOSEES.includes(sel.value); synchroBientot(); };
-  sel.onchange=()=>{ sauver(); toast("Offre : « "+ETAPES[sel.value]+" »"); };
-  dd.onchange=()=>{ if(!dd.value) dd.value=aujourdhuiIso(); sauver(); toast("Date de dépôt : "+dateDepotFr(dd.value)); };
+  const majBouton=()=>{ const b=ligne.closest(".carte")?.querySelector(".btn-statut"); if(b) b.replaceWith(boutonOffreDeposee(m)); };
+  sel.onchange=()=>{ sauver(); majBouton(); toast("Offre : « "+ETAPES[sel.value]+" »"); };
+  dd.onchange=()=>{ if(!dd.value) dd.value=aujourdhuiIso(); sauver(); majBouton(); toast("Date de dépôt : "+dateDepotFr(dd.value)); };
   mt.onchange=()=>{ sauver(); if(mt.value) mt.value=nombre(mt.value).toLocaleString("fr-FR"); toast("Montant de l'offre enregistré"); };
   const ligne=el("div",{class:"suivi-offre etape-"+(res.etape||"prepa")},
     el("span",{class:"lib",text:"Suivi de l'offre"}),sel,champDepot,

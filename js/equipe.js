@@ -129,13 +129,19 @@ function attributionEquipe(m){
   const dep=e&&ETAPES_DEPOSEES.includes(e.etape)?el("span",{class:"responsable-etape",text:"Offre "+ETAPES[e.etape].toLowerCase()+(e.dateDepot?(e.etape==="depose"?" le ":" · déposée le ")+dateDepotFr(e.dateDepot):"")}):null;
   return el("div",{class:"responsable"},el("span",{class:"responsable-lib",text:"Responsable de l'offre"}),valeur,dep);
 }
-// bouton « Offre déposée » (encart en « J'y réponds »)
+// bouton « Statut offre » (encart en « J'y réponds ») : un appui passe l'offre en « Offre déposée » (vert) ;
+// ensuite le statut se change avec la liste déroulante « Suivi de l'offre »
+const STATUT_BOUTON={depose:["✓ Offre déposée","vert"],gagne:["🏆 Offre gagnée","vert"],perdu:["✗ Offre perdue","rouge"],sanssuite:["Sans suite","gris"],abandon:["Abandonnée","gris"]};
 function boutonOffreDeposee(m){
   const res=resultats[m.idweb], et=res&&res.etape;
-  if(ETAPES_DEPOSEES.includes(et)) return el("span",{class:"btn btn-depose fait",title:"Étape de l'offre : "+ETAPES[et]+". La date de dépôt se corrige dans « Suivi de l'offre »."},"✓ Offre déposée"+(res.dateDepot?" le "+dateDepotFr(res.dateDepot):""));
-  return el("button",{class:"btn btn-depose",type:"button",title:"L'offre est déposée sur la plateforme : passe le suivi de l'offre à « Déposée »",onclick:()=>{
+  const versListe=e=>{ const s=e.currentTarget.closest(".carte")?.querySelector('select[aria-label="Étape de l\'offre"]'); if(s){ s.scrollIntoView({block:"nearest"}); s.focus(); } };
+  if(STATUT_BOUTON[et]){
+    const [lib,coul]=STATUT_BOUTON[et];
+    return el("button",{class:"btn btn-statut fait "+coul,type:"button",title:"Statut de l'offre : "+ETAPES[et]+". Pour le modifier, utilisez la liste « Suivi de l'offre ».",onclick:versListe},lib+(res.dateDepot&&ETAPES_DEPOSEES.includes(et)?" le "+dateDepotFr(res.dateDepot):""));
+  }
+  return el("button",{class:"btn btn-statut",type:"button",title:"Un appui passe l'offre en « Offre déposée » avec la date du jour. Le statut se modifie ensuite dans la liste « Suivi de l'offre ».",onclick:()=>{
     majResultat(m.idweb,{etape:"depose",dateDepot:aujourdhuiIso(),m:resumeMarche(m)}); synchroBientot(); toast("Offre déposée : bonne chance !"); redessinerCartes(m.idweb);
-  }},"✓ Offre déposée");
+  }},"Statut offre");
 }
 
 /* ---------- tableau de bord de l'équipe (administrateur de la société) ---------- */
