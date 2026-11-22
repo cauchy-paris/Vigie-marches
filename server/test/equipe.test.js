@@ -68,10 +68,15 @@ for (const mode of ["variable", "base"]) test("équipe (" + mode + ")", { skip: 
     assert.equal(r.statut, 200, r.texte);
     assert.equal(r.json.entree.etape, "depose");
     assert.equal(r.json.entree.montant, 185000);
+    assert.match(r.json.entree.dateDepot, /^\d{4}-\d{2}-\d{2}$/, "date du jour par défaut");
+    r = await eq("marc@a.fr", "etape", { id: M.idweb, etape: "depose", dateDepot: "2026-11-20" });
+    assert.equal(r.json.entree.dateDepot, "2026-11-20");
+    assert.equal((await eq("marc@a.fr", "etape", { id: M.idweb, etape: "depose", dateDepot: "hier" })).statut, 400);
     assert.equal((await eq("marc@a.fr", "etape", { id: M.idweb, etape: "nimporte" })).statut, 400);
     r = await eq("chef@a.fr", "etape", { id: M.idweb, etape: "gagne" });
     assert.equal(r.json.entree.etape, "gagne");
     assert.equal(r.json.entree.montant, 185000, "le montant reste");
+    assert.equal(r.json.entree.dateDepot, "2026-11-20", "la date de dépôt reste");
   });
   await t.test("une étape sur un marché que personne ne suit le crée pour soi", async () => {
     const r = await eq("lea@a.fr", "etape", { id: "26-999", etape: "depose", m: { objet: "Autre marché" } });

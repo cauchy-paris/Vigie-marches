@@ -20,7 +20,7 @@ const COLS=[
   {k:"limite",titre:"Date limite de remise",l:16,date:2},{k:"decision",titre:"Décision",l:19},
   {k:"dossier",titre:"Dossier",l:44},{k:"ref",titre:"Réf. BOAMP",l:11},
   {k:"resultat",titre:"Résultat",l:16},{k:"montantOffre",titre:"Montant de l'offre (€ HT)",l:16},
-  {k:"collab",titre:"Collaborateur désigné",l:22}
+  {k:"collab",titre:"Collaborateur désigné",l:22},{k:"dateDepot",titre:"Date de dépôt",l:13,date:1}
 ];
 const estNePasRepondre=v=>/ne\s*repon/.test(sansAccent(String(v||"")));
 const CLE_TABLEAU="vigie.tableau.v1";
@@ -85,6 +85,7 @@ async function ligneTableau(m,od){
   L.resultat=ETAPES[(res&&res.etape)||"prepa"];
   if(res&&res.montant) L.montantOffre=res.montant;
   L.collab=collaborateurDe(m.idweb);
+  if(res&&res.dateDepot&&ETAPES_DEPOSEES.includes(res.etape)) L.dateDepot=new Date(res.dateDepot+"T12:00:00");
   return {L,notes};
 }
 
@@ -220,7 +221,7 @@ async function synchroTableau(interactif){
     if(!ws){ ws=feuilleNeuve(wb); cree=true; }
     let C=colonnes(ws);
     // colonnes ajoutées depuis (Résultat, Montant de l'offre) : créées au bout du tableau existant
-    for(const k of ["resultat","montantOffre","collab"]) if(!C[k]){
+    for(const k of ["resultat","montantOffre","collab","dateDepot"]) if(!C[k]){
       const col=COLS.find(x=>x.k===k), n=ws.getRow(1).cellCount+1, h=ws.getCell(1,n);
       h.value=col.titre; h.font={bold:true,color:{argb:"FFFFFFFF"}}; h.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF16337A"}}; h.alignment={vertical:"middle",horizontal:"center",wrapText:true};
       ws.getColumn(n).width=col.l; C=colonnes(ws); colAjoutee=true;
@@ -261,6 +262,7 @@ async function synchroTableau(interactif){
       const res=resultats[ref], cR=ws.getCell(i,C.resultat), cM=C.montantOffre?ws.getCell(i,C.montantOffre):null;
       if(res&&res.sale){
         cR.value=ETAPES[res.etape]||""; if(cM&&res.montant){ cM.value=res.montant; cM.numFmt='#,##0 "€"'; }
+        if(C.dateDepot&&res.dateDepot&&ETAPES_DEPOSEES.includes(res.etape)){ const cD=ws.getCell(i,C.dateDepot); cD.value=new Date(res.dateDepot+"T12:00:00"); cD.numFmt="dd/mm/yyyy"; }
         nettoyer.push(ref); modifie=true; continue;
       }
       const et=etapeDeTexte(cR.text), mt=cM?nombre(cM.value&&cM.value.result!=null?cM.value.result:cM.text):0;

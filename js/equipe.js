@@ -45,8 +45,8 @@ async function chargerEquipe(){
         }
         // étape changée par un autre membre de l'équipe
         const res=resultats[e.id];
-        if(e.par!==Equipe.moi&&(!res||res.etape!==e.etape||(e.montant&&res.montant!==e.montant))){
-          majResultat(e.id,{etape:e.etape,...(e.montant?{montant:e.montant}:{}),m:resumeMarche(e.m||{})});
+        if(e.par!==Equipe.moi&&(!res||res.etape!==e.etape||(e.montant&&res.montant!==e.montant)||(e.dateDepot&&res.dateDepot!==e.dateDepot))){
+          majResultat(e.id,{etape:e.etape,...(e.montant?{montant:e.montant}:{}),...(e.dateDepot?{dateDepot:e.dateDepot}:{}),m:resumeMarche(e.m||{})});
         }
       }
       // mes « J'y réponds » d'avant le travail d'équipe : enregistrés pour l'équipe
@@ -100,34 +100,41 @@ function equipeEtape(id,res){
   if(e&&e.collab!==Equipe.moi&&!Equipe.chef) return;
   if(!e&&!(statuts[id]&&statuts[id].statut==="reponse")) return;
   const m=statuts[id]&&statuts[id].m;
-  appelEquipe("etape",{id,etape:res.etape,montant:res.montant||null,...(m?{m:snapshotEquipe(m)}:{})}).then(r=>{ Equipe.entrees[id]=r.entree; redessinerCartes(id); },()=>{});
+  appelEquipe("etape",{id,etape:res.etape,montant:res.montant||null,dateDepot:res.dateDepot||null,...(m?{m:snapshotEquipe(m)}:{})}).then(r=>{ Equipe.entrees[id]=r.entree; redessinerCartes(id); },()=>{});
 }
 
 /* ---------- sur l'encart ---------- */
 function badgeEquipe(m){
   if(!equipeVisible()) return null;
   const e=Equipe.entrees[m.idweb]; if(!e) return null;
-  const moi=e.collab===Equipe.moi, et=e.etape&&e.etape!=="prepa"?" · "+ETAPES[e.etape]:"";
+  const moi=e.collab===Equipe.moi, et=e.etape&&e.etape!=="prepa"?" · "+ETAPES[e.etape]+(e.dateDepot&&ETAPES_DEPOSEES.includes(e.etape)?" le "+dateDepotFr(e.dateDepot):""):"";
   return el("span",{class:"badge equipe"+(moi?" moi":""),title:(moi?"Vous répondez":e.collabNom+" répond")+" à ce marché"+(e.par&&e.par!==e.collab?" (attribué par "+e.parNom+")":"")+", depuis le "+new Date(e.cree).toLocaleDateString("fr-FR"),text:"👤 "+(moi?"Vous":e.collabNom)+et});
 }
 function attributionEquipe(m){
-  if(!equipeVisible()||!Equipe.chef) return null;
+  if(!equipeVisible()) return null;
   const e=Equipe.entrees[m.idweb];
-  const sel=el("select",{class:"attribuer","aria-label":"Attribuer ce marché à un collaborateur",title:"Attribuer ce marché à un collaborateur"},
-    el("option",{value:"",text:"— personne —"}),Equipe.membres.map(x=>el("option",{value:x.email,text:x.nom+(x.email===Equipe.moi?" (vous)":""),selected:!!e&&e.collab===x.email})));
-  sel.onchange=async()=>{
-    if(!sel.value){ if(e&&confirm("Retirer l'attribution de ce marché ?")) equipeLiberer(m.idweb); return; }
-    if(await equipePrendre(m,sel.value)) toast("Marché attribué à "+nomMembre(sel.value));
-    if(sel.value===Equipe.moi&&(!statuts[m.idweb]||statuts[m.idweb].statut!=="reponse")) changerStatut(m,"reponse");
-  };
-  return el("label",{class:"attribuer-l"},"👤 Collaborateur",sel);
+  let valeur;
+  if(Equipe.chef){
+    valeur=el("select",{class:"attribuer","aria-label":"Responsable de l'offre"},
+      el("option",{value:"",text:"— personne —"}),Equipe.membres.map(x=>el("option",{value:x.email,text:x.nom+(x.email===Equipe.moi?" (vous)":""),selected:!!e&&e.collab===x.email})));
+    valeur.onchange=async()=>{
+      if(!valeur.value){ if(e&&confirm("Retirer le responsable de cette offre ?")) equipeLiberer(m.idweb); return; }
+      if(await equipePrendre(m,valeur.value)) toast("Responsable de l'offre : "+nomMembre(valeur.value));
+      if(valeur.value===Equipe.moi&&(!statuts[m.idweb]||statuts[m.idweb].statut!=="reponse")) changerStatut(m,"reponse");
+    };
+  }else{
+    if(!e) return null;
+    valeur=el("span",{class:"responsable-nom",text:e.collab===Equipe.moi?e.collabNom+" (vous)":e.collabNom});
+  }
+  const dep=e&&ETAPES_DEPOSEES.includes(e.etape)?el("span",{class:"responsable-etape",text:"Offre "+ETAPES[e.etape].toLowerCase()+(e.dateDepot?(e.etape==="depose"?" le ":" · déposée le ")+dateDepotFr(e.dateDepot):"")}):null;
+  return el("div",{class:"responsable"},el("span",{class:"responsable-lib",text:"Responsable de l'offre"}),valeur,dep);
 }
 // bouton « Offre déposée » (encart en « J'y réponds »)
 function boutonOffreDeposee(m){
   const res=resultats[m.idweb], et=res&&res.etape;
-  if(["depose","gagne","perdu","sanssuite"].includes(et)) return el("span",{class:"btn btn-depose fait",title:"Étape de l'offre : "+ETAPES[et]},"✓ Offre "+ETAPES[et].toLowerCase());
+  if(ETAPES_DEPOSEES.includes(et)) return el("span",{class:"btn btn-depose fait",title:"Étape de l'offre : "+ETAPES[et]+". La date de dépôt se corrige dans « Suivi de l'offre »."},"✓ Offre déposée"+(res.dateDepot?" le "+dateDepotFr(res.dateDepot):""));
   return el("button",{class:"btn btn-depose",type:"button",title:"L'offre est déposée sur la plateforme : passe le suivi de l'offre à « Déposée »",onclick:()=>{
-    majResultat(m.idweb,{etape:"depose",m:resumeMarche(m)}); synchroBientot(); toast("Offre déposée : bonne chance !"); redessinerCartes(m.idweb);
+    majResultat(m.idweb,{etape:"depose",dateDepot:aujourdhuiIso(),m:resumeMarche(m)}); synchroBientot(); toast("Offre déposée : bonne chance !"); redessinerCartes(m.idweb);
   }},"✓ Offre déposée");
 }
 
@@ -141,7 +148,7 @@ function blocEquipe(){
   });
   const enCours=E.filter(e=>["prepa","depose"].includes(e.etape)).sort((a,b)=>((a.m&&a.m.limite)||"9").localeCompare((b.m&&b.m.limite)||"9"));
   const choix=e=>{
-    const s=el("select",{"aria-label":"Collaborateur désigné"},Equipe.membres.map(x=>el("option",{value:x.email,text:x.nom,selected:x.email===e.collab})));
+    const s=el("select",{"aria-label":"Responsable de l'offre"},Equipe.membres.map(x=>el("option",{value:x.email,text:x.nom,selected:x.email===e.collab})));
     s.onchange=async()=>{ if(await equipePrendre({idweb:e.id,objet:e.m.objet,...e.m},s.value)) toast("Marché attribué à "+nomMembre(s.value)); afficherBord(); };
     return s;
   };
@@ -153,24 +160,24 @@ function blocEquipe(){
       el("tbody",{},parMembre.map(r=>el("tr",{},el("td",{text:r.x.nom}),el("td",{class:"nombre",text:r.prepa}),el("td",{class:"nombre",text:r.depose}),el("td",{class:"nombre",text:r.g}),el("td",{class:"nombre",text:r.p}),el("td",{class:"nombre",text:r.taux==null?"–":r.taux+" %"}),el("td",{class:"nombre",text:r.montant?euros(r.montant):"–"})))))),
     el("h3",{class:"sous-titre",text:"Dossiers en cours ("+enCours.length+")"}),
     enCours.length?el("div",{class:"table-defil"},el("table",{class:"ia-criteres bord-table"},
-      el("thead",{},el("tr",{},["Remise","Marché","Acheteur","Collaborateur désigné","Étape"].map(t=>el("th",{text:t})))),
+      el("thead",{},el("tr",{},["Remise","Marché","Acheteur","Responsable de l'offre","Étape"].map(t=>el("th",{text:t})))),
       el("tbody",{},enCours.map(e=>{ const j=joursRestants(e.m&&e.m.limite); return el("tr",{},
         el("td",{class:"nombre"},e.m&&e.m.limite?fmtDate(e.m.limite):"–",j!=null&&j>=0?el("small",{class:j<=7?"urgent":"",text:" J-"+j}):null),
-        el("td",{text:(e.m&&e.m.objet)||e.id}),el("td",{text:(e.m&&e.m.acheteur)||"–"}),el("td",{},choix(e)),el("td",{text:ETAPES[e.etape]||e.etape})); })))):el("p",{class:"note-docs",text:"Aucun dossier « J'y réponds » en cours dans l'équipe."}));
+        el("td",{text:(e.m&&e.m.objet)||e.id}),el("td",{text:(e.m&&e.m.acheteur)||"–"}),el("td",{},choix(e)),el("td",{text:(ETAPES[e.etape]||e.etape)+(e.dateDepot&&ETAPES_DEPOSEES.includes(e.etape)?" le "+dateDepotFr(e.dateDepot):"")})); })))):el("p",{class:"note-docs",text:"Aucun dossier « J'y réponds » en cours dans l'équipe."}));
 }
 async function recapEquipeExcel(){
   const ExcelJS=await chargerExcelJS();
   const wb=new ExcelJS.Workbook(), ws=wb.addWorksheet("Équipe",{views:[{state:"frozen",ySplit:1}]});
   ws.columns=[{header:"Nom du marché",key:"nom",width:46},{header:"Acheteur",key:"acheteur",width:30},{header:"Date limite de remise",key:"limite",width:18},
-    {header:"Collaborateur désigné",key:"collab",width:22},{header:"Étape",key:"etape",width:16},{header:"Montant de l'offre (€ HT)",key:"montant",width:16},
+    {header:"Collaborateur désigné",key:"collab",width:22},{header:"Étape",key:"etape",width:16},{header:"Date de dépôt",key:"depot",width:13},{header:"Montant de l'offre (€ HT)",key:"montant",width:16},
     {header:"Pris le",key:"cree",width:13},{header:"Attribué par",key:"par",width:20},{header:"Réf. BOAMP",key:"ref",width:12}];
   const h=ws.getRow(1); h.height=30; h.eachCell(c=>{ c.font={bold:true,color:{argb:"FFFFFFFF"}}; c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF16337A"}}; c.alignment={vertical:"middle",horizontal:"center",wrapText:true}; });
   Object.values(Equipe.entrees).sort((a,b)=>((a.m&&a.m.limite)||"9").localeCompare((b.m&&b.m.limite)||"9")).forEach(e=>{
-    const r=ws.addRow({nom:(e.m&&e.m.objet)||e.id,acheteur:(e.m&&e.m.acheteur)||"",limite:e.m&&e.m.limite?new Date(e.m.limite):null,collab:e.collabNom,etape:ETAPES[e.etape]||e.etape,montant:e.montant||null,cree:new Date(e.cree),par:e.parNom||"",ref:e.id});
-    r.getCell("limite").numFmt="dd/mm/yyyy hh:mm"; r.getCell("cree").numFmt="dd/mm/yyyy"; r.getCell("montant").numFmt='#,##0 "€"';
+    const r=ws.addRow({nom:(e.m&&e.m.objet)||e.id,acheteur:(e.m&&e.m.acheteur)||"",limite:e.m&&e.m.limite?new Date(e.m.limite):null,collab:e.collabNom,etape:ETAPES[e.etape]||e.etape,depot:e.dateDepot?new Date(e.dateDepot+"T12:00:00"):null,montant:e.montant||null,cree:new Date(e.cree),par:e.parNom||"",ref:e.id});
+    r.getCell("limite").numFmt="dd/mm/yyyy hh:mm"; r.getCell("cree").numFmt="dd/mm/yyyy"; r.getCell("depot").numFmt="dd/mm/yyyy"; r.getCell("montant").numFmt='#,##0 "€"';
     r.alignment={vertical:"top",wrapText:true};
   });
-  ws.autoFilter={from:{row:1,column:1},to:{row:1,column:9}};
+  ws.autoFilter={from:{row:1,column:1},to:{row:1,column:10}};
   const blob=new Blob([await wb.xlsx.writeBuffer()],{type:XLSX_MIME});
   const a=el("a",{href:URL.createObjectURL(blob),download:"Vigie_equipe_"+dateIso(new Date())+".xlsx"}); document.body.append(a); a.click(); a.remove();
 }

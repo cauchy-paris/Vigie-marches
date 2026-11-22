@@ -349,3 +349,9 @@ select.attribuer{border:1.5px solid var(--trait);border-radius:8px;padding:6px 8
 .titre-ligne{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .titre-ligne h2{margin:0}
 .attribuer-l{display:inline-flex;gap:6px;align-items:center;font-size:12.5px;font-weight:600;color:var(--bleu)}
+.responsable{display:flex;flex-direction:column;gap:4px;align-items:flex-start;border-left:4px solid var(--bleu-moyen);background:var(--fond);border-radius:6px;padding:8px 12px}
+.responsable-lib{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--bleu)}
+.responsable-nom{font-size:14px;font-weight:600;color:var(--bleu-fonce)}
+.responsable-etape{font-size:12.5px;color:#1e7b3c}
+.date-depot input{width:140px;text-align:left}
+.date-depot-bord{display:block;color:var(--gris);font-size:12px}

@@ -8,6 +8,8 @@ const { membresSociete, baseDeDonnees, nomDe } = require("./comptes");
 
 const ETAPES = new Set(["prepa", "depose", "gagne", "perdu", "sanssuite", "abandon"]);
 const chef = moi => moi.r === "admin" || moi.r === "gerant";
+const jourIso = d => (d instanceof Date ? new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString() : String(d)).slice(0, 10);
+const dateValide = d => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(new Date(d + "T12:00:00"));
 const idValide = id => typeof id === "string" && id.length >= 1 && id.length <= 120;
 
 /* ---------- stockage ---------- */
@@ -27,11 +29,12 @@ async function pool() {
     cree timestamptz not null default now(),
     maj timestamptz not null default now(),
     primary key (societe, id)
-  )`).catch(e => { tablePrete = null; throw e; });
+  );
+  alter table vigie_equipe add column if not exists depot date`).catch(e => { tablePrete = null; throw e; });
   await tablePrete;
   return p;
 }
-const versEntree = l => ({ id: l.id, m: l.m, collab: l.collab, etape: l.etape, montant: l.montant == null ? null : Number(l.montant), par: l.par, cree: new Date(l.cree).toISOString(), maj: new Date(l.maj).toISOString() });
+const versEntree = l => ({ id: l.id, m: l.m, collab: l.collab, etape: l.etape, montant: l.montant == null ? null : Number(l.montant), dateDepot: l.depot ? jourIso(l.depot) : null, par: l.par, cree: new Date(l.cree).toISOString(), maj: new Date(l.maj).toISOString() });
 async function lister(societe) {
   const p = await pool();
   if (!p) return [...memoire.values()].filter(e => e.societe === societe).map(({ societe: _s, ...e }) => e);
@@ -47,9 +50,9 @@ async function ecrire(societe, e) {
   const p = await pool();
   const maj = new Date().toISOString();
   if (!p) { const avant = memoire.get(societe + "|" + e.id); memoire.set(societe + "|" + e.id, { ...e, societe, cree: avant ? avant.cree : maj, maj }); return; }
-  await p.query(`insert into vigie_equipe (societe, id, m, collab, etape, montant, par) values ($1,$2,$3,$4,$5,$6,$7)
-    on conflict (societe, id) do update set m = excluded.m, collab = excluded.collab, etape = excluded.etape, montant = excluded.montant, par = excluded.par, maj = now()`,
-  [societe, e.id, JSON.stringify(e.m), e.collab, e.etape, e.montant, e.par]);
+  await p.query(`insert into vigie_equipe (societe, id, m, collab, etape, montant, depot, par) values ($1,$2,$3,$4,$5,$6,$7,$8)
+    on conflict (societe, id) do update set m = excluded.m, collab = excluded.collab, etape = excluded.etape, montant = excluded.montant, depot = excluded.depot, par = excluded.par, maj = now()`,
+  [societe, e.id, JSON.stringify(e.m), e.collab, e.etape, e.montant, e.dateDepot || null, e.par]);
 }
 async function retirer(societe, id) {
   const p = await pool();
@@ -93,7 +96,7 @@ async function routeEquipe(req, res, u, { json, lireCorps }) {
       }
       const m = lireMarche(c.m) || (avant && avant.m);
       if (!m) return json(res, 400, { message: "Informations du marché manquantes." });
-      const e = { id: c.id, m, collab: pour, etape: (avant && avant.etape) || "prepa", montant: avant ? avant.montant : null, par: moi.e };
+      const e = { id: c.id, m, collab: pour, etape: (avant && avant.etape) || "prepa", montant: avant ? avant.montant : null, dateDepot: avant ? avant.dateDepot : null, par: moi.e };
       await ecrire(societe, e);
       console.log(new Date().toISOString(), "Équipe :", c.id, "→", pour, "par", moi.e);
       return json(res, 200, { entree: publique(await lire(societe, c.id)) });
@@ -102,13 +105,15 @@ async function routeEquipe(req, res, u, { json, lireCorps }) {
     // étape de l'offre : en préparation, déposée, gagnée, perdue…
     if (chemin === "etape") {
       if (!ETAPES.has(c.etape)) return json(res, 400, { message: "Étape inconnue." });
+      if (c.dateDepot != null && !dateValide(c.dateDepot)) return json(res, 400, { message: "Date de dépôt invalide." });
+      const depot = ["depose", "gagne", "perdu", "sanssuite"].includes(c.etape) ? (c.dateDepot || (avant && avant.dateDepot) || jourIso(new Date())) : null;
       if (!avant) {
         const m = lireMarche(c.m);
         if (!m) return json(res, 404, { message: "Ce marché n'est suivi par personne dans votre société." });
-        await ecrire(societe, { id: c.id, m, collab: moi.e, etape: c.etape, montant: c.montant > 0 ? Number(c.montant) : null, par: moi.e });
+        await ecrire(societe, { id: c.id, m, collab: moi.e, etape: c.etape, montant: c.montant > 0 ? Number(c.montant) : null, dateDepot: depot, par: moi.e });
       } else {
         if (!auteur(avant)) return json(res, 403, { message: "Ce marché est suivi par " + nomDe(avant.collab) + "." });
-        await ecrire(societe, { ...avant, m: lireMarche(c.m) || avant.m, etape: c.etape, montant: c.montant > 0 ? Number(c.montant) : c.montant === null ? null : avant.montant, par: moi.e });
+        await ecrire(societe, { ...avant, m: lireMarche(c.m) || avant.m, etape: c.etape, montant: c.montant > 0 ? Number(c.montant) : c.montant === null ? null : avant.montant, dateDepot: depot, par: moi.e });
       }
       return json(res, 200, { entree: publique(await lire(societe, c.id)) });
     }

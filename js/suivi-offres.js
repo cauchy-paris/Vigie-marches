@@ -7,6 +7,9 @@ const CLE_RESULTATS="vigie.resultats.v1";
 const ETAPES={prepa:"En préparation",depose:"Déposée",gagne:"Gagnée",perdu:"Perdue",sanssuite:"Sans suite",abandon:"Abandonnée"};
 let resultats=lire(CLE_RESULTATS,{});
 function sauverResultats(){ if(!ecrire(CLE_RESULTATS,resultats)) toast("Attention : ce navigateur bloque l'enregistrement local"); }
+const ETAPES_DEPOSEES=["depose","gagne","perdu","sanssuite"];
+const aujourdhuiIso=()=>new Date().toLocaleDateString("sv-SE",{timeZone:"Europe/Paris"});
+const dateDepotFr=d=>d?new Date(d+"T12:00:00").toLocaleDateString("fr-FR"):"";
 function resumeMarche(m){ return {objet:m.objet,acheteur:m.acheteur,limite:m.limite||null,types:m.types||[],procedure:m.procedure||"",deps:m.deps||[]}; }
 function etapeDeTexte(t){
   const x=sansAccent(String(t||"")).trim(); if(!x) return null;
@@ -22,6 +25,8 @@ function etapeDeTexte(t){
 function majResultat(id,champs,sale=true){
   const av=resultats[id]||{etape:"prepa"};
   resultats[id]={...av,...champs,date:new Date().toISOString(),...(sale?{sale:true}:{})};
+  // date de dépôt : aujourd'hui par défaut dès que l'offre est déposée
+  if(ETAPES_DEPOSEES.includes(resultats[id].etape)&&!resultats[id].dateDepot) resultats[id].dateDepot=aujourdhuiIso();
   if(champs.etape&&champs.etape!==av.etape) resultats[id]["d_"+champs.etape]=new Date().toISOString();
   sauverResultats();
   equipeEtape(id,resultats[id]);
@@ -34,11 +39,14 @@ function ligneSuiviOffre(m){
   const sel=el("select",{"aria-label":"Étape de l'offre"},Object.entries(ETAPES).map(([k,lib])=>el("option",{value:k,text:lib})));
   sel.value=res.etape||"prepa";
   const mt=el("input",{type:"text",inputmode:"numeric",placeholder:"ex. 185 000","aria-label":"Montant de l'offre en euros HT",value:res.montant?Number(res.montant).toLocaleString("fr-FR"):""});
-  const sauver=()=>{ majResultat(m.idweb,{etape:sel.value,montant:nombre(mt.value)||null,m:resumeMarche(m)}); ligne.className="suivi-offre etape-"+sel.value; synchroBientot(); };
+  const dd=el("input",{type:"date","aria-label":"Date de dépôt de l'offre",value:res.dateDepot||aujourdhuiIso(),max:aujourdhuiIso()});
+  const champDepot=el("label",{class:"date-depot",hidden:!ETAPES_DEPOSEES.includes(res.etape)},"Date de dépôt",dd);
+  const sauver=()=>{ majResultat(m.idweb,{etape:sel.value,montant:nombre(mt.value)||null,...(ETAPES_DEPOSEES.includes(sel.value)?{dateDepot:dd.value||aujourdhuiIso()}:{}),m:resumeMarche(m)}); ligne.className="suivi-offre etape-"+sel.value; champDepot.hidden=!ETAPES_DEPOSEES.includes(sel.value); synchroBientot(); };
   sel.onchange=()=>{ sauver(); toast("Offre : « "+ETAPES[sel.value]+" »"); };
+  dd.onchange=()=>{ if(!dd.value) dd.value=aujourdhuiIso(); sauver(); toast("Date de dépôt : "+dateDepotFr(dd.value)); };
   mt.onchange=()=>{ sauver(); if(mt.value) mt.value=nombre(mt.value).toLocaleString("fr-FR"); toast("Montant de l'offre enregistré"); };
   const ligne=el("div",{class:"suivi-offre etape-"+(res.etape||"prepa")},
-    el("span",{class:"lib",text:"Suivi de l'offre"}),sel,
+    el("span",{class:"lib",text:"Suivi de l'offre"}),sel,champDepot,
     el("label",{},"Montant de l'offre",mt,"€ HT"),
     el("span",{class:"note-docs",text:"Alimente le tableau de bord et la colonne Résultat du tableau Excel."}));
   return ligne;
@@ -57,7 +65,7 @@ function lignesBord(){
     const r=resultats[id]||{etape:"prepa"}, s=statuts[id];
     const m=r.m||(s&&s.m&&resumeMarche(s.m))||{objet:id,acheteur:""};
     const ref=(m.limite&&new Date(m.limite))||(r.date&&new Date(r.date))||new Date();
-    L.push({id,etape:r.etape||"prepa",montant:Number(r.montant)||0,m,ref});
+    L.push({id,etape:r.etape||"prepa",montant:Number(r.montant)||0,m,ref,dateDepot:r.dateDepot||""});
   }
   if(bordPeriode){
     const debut=bordPeriode==="annee"?new Date(new Date().getFullYear(),0,1):new Date(Date.now()-Number(bordPeriode)*864e5);
@@ -105,7 +113,7 @@ function tableBord(L,avenir){
       sel.onchange=()=>{ majResultat(x.id,{etape:sel.value,m:x.m}); synchroBientot(); };
       return el("tr",{},
         el("td",{class:"nombre"},x.m.limite?fmtDate(x.m.limite):"–",avenir&&j!=null&&j>=0?el("small",{class:j<=7?"urgent":"",text:" J-"+j}):null),
-        el("td",{text:x.m.objet}),el("td",{text:x.m.acheteur||"–"}),el("td",{},sel),el("td",{class:"nombre",text:x.montant?euros(x.montant):"–"}));
+        el("td",{text:x.m.objet}),el("td",{text:x.m.acheteur||"–"}),el("td",{},sel,x.dateDepot&&ETAPES_DEPOSEES.includes(x.etape)?el("small",{class:"date-depot-bord",text:" déposée le "+dateDepotFr(x.dateDepot)}):null),el("td",{class:"nombre",text:x.montant?euros(x.montant):"–"}));
     }))));
 }
 function graphiqueMois(deposes){
