@@ -106,6 +106,7 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
   /* ---------- texte à coller dans Render quand la sauvegarde n'est pas automatique ---------- */
   function blocSauvegarde(s) {
     if (!s || s.auto) return null;
+    if (s.admin) return el("p", { class: "cx-msg info", text: "Prévenez l'administrateur de Vigie : votre nouveau mot de passe doit encore être enregistré de son côté pour durer après le prochain redémarrage du serveur." });
     return el("div", { class: "cx-msg info" },
       el("p", { style: "margin:0 0 6px", text: "Pour que ce changement survive au prochain redémarrage du serveur, copiez le texte ci-dessous dans Render, service vigie-marches-dce, onglet Environment, variable VIGIE_COMPTES (ou ajoutez la variable RENDER_API_KEY pour que ce soit automatique, voir l'aide)." }),
       el("textarea", { class: "cx-coller", readonly: true, onclick: e => e.target.select() }, s.valeur),
@@ -128,7 +129,7 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       champ("Adresse mail", { type: "email", name: "email", autocomplete: "username", required: true, value: derniereAdresse() }),
       champ("Mot de passe", { type: "password", name: "motdepasse", autocomplete: "current-password", required: true }),
       msg, bouton("Se connecter", "btn-plein"),
-      el("p", { class: "cx-petit", text: "Mot de passe oublié ? Demandez à l'administrateur de Vigie de vous en donner un nouveau." }));
+      el("p", { class: "cx-petit" }, el("a", { href: "#", text: "Mot de passe oublié ?", onclick: e => { e.preventDefault(); v.remove(); ecranOubli(suite, form.email.value); } })));
     const v = ecran(form, "Connectez-vous pour accéder à votre veille.");
     form.onsubmit = async e => {
       e.preventDefault(); occupe(form, true, "Connexion…"); msg.className = "cx-msg"; msg.textContent = "";
@@ -140,6 +141,45 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     };
     // vérifie (et réveille le serveur) : propose l'installation s'il n'existe encore aucun compte
     appel("etat").then(r => { if (!r.installe) { v.remove(); ecranInstallation(suite, r); } }).catch(() => {});
+  }
+  function ecranOubli(suite, adresse) {
+    const msg = el("p", { class: "cx-msg", role: "alert" });
+    const form = el("form", { style: "display:grid;gap:12px" },
+      el("p", { class: "cx-petit", style: "font-size:13.5px", text: "Indiquez l'adresse mail de votre compte : vous recevrez un lien pour créer un nouveau mot de passe." }),
+      champ("Adresse mail", { type: "email", name: "email", autocomplete: "username", required: true, value: adresse || derniereAdresse() }),
+      msg, bouton("Recevoir le lien", "btn-plein"),
+      el("p", { class: "cx-petit" }, el("a", { href: "#", text: "← Retour à la connexion", onclick: e => { e.preventDefault(); v.remove(); ecranConnexion(suite); } })));
+    const v = ecran(form, "Mot de passe oublié");
+    form.onsubmit = async e => {
+      e.preventDefault(); occupe(form, true, "Envoi…"); msg.className = "cx-msg"; msg.textContent = "";
+      const t = patience(msg);
+      try { const r = await appel("oubli", { email: form.email.value }); clearTimeout(t); msg.className = "cx-msg ok"; msg.textContent = r.message; form.querySelector("button[type=submit]").remove(); }
+      catch (err) { clearTimeout(t); msg.className = "cx-msg err"; msg.textContent = err.message === "Failed to fetch" ? "Serveur injoignable, réessayez dans un instant." : err.message; occupe(form, false); }
+    };
+  }
+  function ecranReinitialisation(suite, jeton) {
+    const msg = el("p", { class: "cx-msg", role: "alert" });
+    const form = el("form", { style: "display:grid;gap:12px" },
+      champ("Nouveau mot de passe (10 caractères minimum)", { type: "password", name: "nouveau", required: true, minlength: "10", autocomplete: "new-password" }),
+      champ("Nouveau mot de passe, encore une fois", { type: "password", name: "confirmation", required: true, minlength: "10", autocomplete: "new-password" }),
+      msg, bouton("Enregistrer et me connecter", "btn-plein"));
+    const v = ecran(form, "Créer un nouveau mot de passe");
+    form.onsubmit = async e => {
+      e.preventDefault(); msg.className = "cx-msg"; msg.textContent = "";
+      if (form.nouveau.value !== form.confirmation.value) { msg.className = "cx-msg err"; msg.textContent = "Les deux mots de passe sont différents."; return; }
+      occupe(form, true, "Enregistrement…");
+      const t = patience(msg);
+      try {
+        const r = await appel("reinitialisation", { jeton, nouveau: form.nouveau.value });
+        clearTimeout(t); garder({ jeton: r.jeton, lien: r.lien, compte: r.compte });
+        const b = blocSauvegarde(r.sauvegarde);
+        if (b) form.replaceChildren(el("p", { class: "cx-msg ok", text: "Mot de passe enregistré." }), b, el("button", { type: "button", class: "btn btn-plein", text: "Continuer", onclick: () => { v.remove(); entrer(suite); } }));
+        else { v.remove(); entrer(suite); }
+      } catch (err) {
+        clearTimeout(t); msg.className = "cx-msg err"; msg.textContent = err.message; occupe(form, false);
+        if (err.statut === 400 && /expiré/.test(err.message)) form.append(el("p", { class: "cx-petit" }, el("a", { href: "#", text: "Redemander un lien", onclick: ev => { ev.preventDefault(); v.remove(); ecranOubli(suite); } })));
+      }
+    };
   }
   function ecranInstallation(suite, etat) {
     const msg = el("p", { class: "cx-msg", role: "alert" });
@@ -286,6 +326,9 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
     ecranConnexion(() => {}, "Votre session a expiré : reconnectez-vous pour continuer.");
   }
   function demarrer(suite) {
+    // lien « mot de passe oublié » reçu par mail : #reinit=jeton
+    const m = /[#&]reinit=([\w.-]+)/.exec(location.hash);
+    if (m) { history.replaceState(null, "", location.pathname + location.search); garder(null); return ecranReinitialisation(suite, m[1]); }
     if (!session || !session.jeton || expire(session.jeton)) return ecranConnexion(suite);
     entrer(suite);
     // en arrière-plan : vérifie le compte et renouvelle le jeton des liens
@@ -293,5 +336,6 @@ dialog.cx-dlg::backdrop{background:rgba(13,34,87,.45)}
       .catch(e => { if (e.statut === 401) sessionPerdue(); });
     rafraichir(); setInterval(rafraichir, 6 * 3600e3);
   }
+  window.addEventListener("hashchange", () => { if (/[#&]reinit=/.test(location.hash)) location.reload(); });
   window.Comptes = { demarrer, deconnecter, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
 })();
