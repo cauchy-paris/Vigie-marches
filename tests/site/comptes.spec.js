@@ -21,6 +21,8 @@ test.afterAll(() => serveur && serveur.arreter());
 async function preparer(page) {
   await page.route(u => !u.href.startsWith("http://localhost"), async route => {
     const u = route.request().url();
+    // recherche directe sur les plateformes : pas d'appel extérieur pendant les tests
+    if (u.startsWith(SERVEUR + "/plateformes")) return route.fulfill({ json: { ok: true, plateformes: [] }, headers: { "Access-Control-Allow-Origin": "*" } });
     if (u.startsWith(SERVEUR)) {
       const r = await route.fetch({ url: serveur.base + u.slice(SERVEUR.length), headers: { ...route.request().headers(), origin: "http://localhost:4173" } });
       return route.fulfill({ response: r });
