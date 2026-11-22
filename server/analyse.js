@@ -74,7 +74,7 @@ function extraire(buf, nom, profondeur = 0) {
   if (odt && entrees.some(e => e.nom === "mimetype")) return { texte: xmlTexte(odt.lire().toString("utf8")), nom };
   if (profondeur > 1) return null;
   // Archive contenant plusieurs pièces : on prend celle qui ressemble au RC.
-  const fichiers = entrees.filter(e => !/\/$/.test(e.nom) && /\.(pdf|docx?|odt|zip)$/i.test(e.nom) && e.taille < 40e6);
+  const fichiers = entrees.filter(e => !/\/$/.test(e.nom) && !/(^|\/)~\$|(^|\/)\._|__MACOSX/.test(e.nom) && /\.(pdf|docx?|odt|zip)$/i.test(e.nom) && e.taille < 40e6);
   const score = e => {
     const n = e.nom.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
     let s = 0;
@@ -97,7 +97,7 @@ function extraireTous(buf, nom) {
   if (!estZip(buf) || lireZip(buf).some(e => e.nom === "word/document.xml" || e.nom === "content.xml")) { const r = extraire(buf, nom); return r ? [r] : []; }
   const premier = extraire(buf, nom);
   const r = premier ? [premier] : [];
-  for (const e of lireZip(buf).filter(e => !/\/$/.test(e.nom) && /\.(pdf|docx?|odt)$/i.test(e.nom) && e.taille < 40e6 && !/ccap|cctp|dpgf|bpu|dqe|acte d.engagement|(^|[^a-z])ae([^a-z]|$)/i.test(e.nom.split("/").pop())).slice(0, 12)) {
+  for (const e of lireZip(buf).filter(e => !/\/$/.test(e.nom) && !/(^|\/)~\$|(^|\/)\._|__MACOSX/.test(e.nom) && /\.(pdf|docx?|odt)$/i.test(e.nom) && e.taille < 40e6 && !/ccap|cctp|dpgf|bpu|dqe|acte d.engagement|(^|[^a-z])ae([^a-z]|$)/i.test(e.nom.split("/").pop())).slice(0, 12)) {
     const n = e.nom.split("/").pop();
     if (premier && n === premier.nom) continue;
     try { const x = extraire(e.lire(), n, 2); if (x) r.push(x); } catch (err) {}
