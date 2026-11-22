@@ -39,6 +39,8 @@ function carte(m){
 
   // Badges
   const badges=el("div",{class:"badges"});
+  if(m.source) badges.append(el("span",{class:"badge source-pf",title:"Consultation trouvée directement sur "+m.source+" : elle n'est pas publiée au BOAMP",text:"Sur "+m.source+" · hors BOAMP"}));
+  if(m.rectifie) badges.append(el("span",{class:"badge",title:"La plateforme signale un avis rectificatif",text:"Avis rectifié"}));
   if(m.manuel) badges.append(m.viaMail?el("span",{class:"badge manuel",title:"Ajouté depuis l'alerte « "+(m.viaMail.sujet||"")+" »",text:"Alerte mail"}):el("span",{class:"badge manuel",title:"Ajouté à la main à partir du lien de la consultation",text:"Ajouté par lien"}));
   if(visitePrecedente&&m.parution&&new Date(m.parution)>new Date(visitePrecedente)) badges.append(el("span",{class:"badge nouveau",text:"Nouveau"}));
   { const ch=changementsDe(m.idweb); if(ch.length) badges.append(el("span",{class:"badge modifie",title:ch.map(x=>"• "+x.type+" ("+new Date(x.date).toLocaleDateString("fr-FR")+") : "+x.texte).join("\n"),text:"⚠ "+(ch.some(x=>!x.lu)?"Modifié":"Modifié (vu)")})); }
@@ -70,7 +72,7 @@ function carte(m){
   ajout("Montant estimé",m.montant);
   ajout("Durée",m.duree);
   ajout("Procédure",m.procedure||m.famille);
-  ajout("Lots",m.lots.length?m.lots.length+" lots":"");
+  ajout("Lots",m.lots.length?m.lots.length+" lots":m.nbLots>1?m.nbLots+" lots (détail sur la plateforme)":"");
   ajout("Publié le",fmtDate(m.parution));
   ajout("Prestations",m.descripteurs.join(", "));
   const ce=corpsEtat(m);
@@ -142,7 +144,7 @@ function carte(m){
     ? (plat? (plat.nom+" · "+(plat.compte||"accès selon la plateforme")) : "Lien de consultation indiqué par l'acheteur")
     : m.manuel ? "Marché ajouté sans lien de consultation."
     : "Aucun lien vers le dossier dans l'annonce : les boutons ouvrent l'avis BOAMP, qui donne le contact de l'acheteur.";
-  c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:(m.manuel&&/^MAN-/.test(m.idweb)?(m.viaMail?"Alerte mail":"Ajouté par lien"):(m.manuel?(m.viaMail?"Alerte mail · ":"Ajouté par lien · "):"")+"Avis n° "+m.idweb)+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
+  c.append(el("p",{class:"note-docs"},note+"  ·  ",el("span",{class:"ref",text:m.source?(m.source+" · consultation n° "+m.idweb.split("-").slice(1).join("-")+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")):(m.manuel&&/^MAN-/.test(m.idweb)?(m.viaMail?"Alerte mail":"Ajouté par lien"):(m.manuel?(m.viaMail?"Alerte mail · ":"Ajouté par lien · "):"")+"Avis n° "+m.idweb)+(m.refAcheteur?" · Réf. "+m.refAcheteur:"")})));
   return c;
 }
 

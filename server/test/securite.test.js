@@ -17,7 +17,7 @@ test("sécurité du serveur", async t => {
     assert.equal(r.statut, 403);
   });
   await t.test("sans session, les services du serveur sont refusés", async () => {
-    for (const chemin of ["/dce?origine=https://www.marches-publics.gouv.fr&id=1&org=a", "/fiche?url=https://www.marches-publics.gouv.fr/x"]) {
+    for (const chemin of ["/dce?origine=https://www.marches-publics.gouv.fr&id=1&org=a", "/fiche?url=https://www.marches-publics.gouv.fr/x", "/plateformes?mots=peinture"]) {
       const r = await s.appel(chemin);
       assert.equal(r.statut, 401, chemin + " : " + r.texte.slice(0, 200));
     }

@@ -10,6 +10,7 @@ const { extraireFiche } = require("./fiche");
 const { lireAlertes } = require("./mail");
 const { routeCompte, compteDe, dechiffrer, comptesPrets } = require("./comptes");
 const { routeEquipe } = require("./equipe");
+const { rechercherPlateformes } = require("./plateformes");
 const dns = require("dns").promises;
 const net = require("net");
 
@@ -835,6 +836,28 @@ function pageConnexion(res) {
 <p><a href="${SITE}" style="display:inline-block;background:#16337a;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Ouvrir Vigie Marchés</a></p></body>`);
 }
 
+
+/* ---------- recherche directe sur PLACE, Maximilien et AWS-Achat ----------
+   GET /plateformes?sources=place,maximilien,aws&mots=…&termes=peinture|revêtements&type=TRAVAUX&deps=75,92
+   Chaque plateforme renvoie son état (ok, nombre, message d'erreur) : une panne n'arrête pas les autres. */
+const recherchesParCompte = new Map();
+async function routePlateformes(req, res, u) {
+  const o = req.headers.origin, autorise = o && ORIGINES.has(o) ? o : null;
+  const qui = String((req.compte && req.compte.e) || "?");
+  const t = Date.now(), l = (recherchesParCompte.get(qui) || []).filter(x => t - x < 600000);
+  l.push(t); recherchesParCompte.set(qui, l);
+  if (l.length > 120) return json(res, 429, { ok: false, message: "Trop de recherches en peu de temps : réessayez dans quelques minutes." }, autorise);
+  const liste = (k, sep) => String(u.searchParams.get(k) || "").split(sep).map(x => x.trim()).filter(Boolean).slice(0, 40);
+  const plateformes = await rechercherPlateformes({
+    sources: liste("sources", ","),
+    mots: String(u.searchParams.get("mots") || "").slice(0, 120),
+    termes: liste("termes", "|").map(x => x.slice(0, 60)),
+    type: String(u.searchParams.get("type") || ""),
+    deps: liste("deps", ","),
+  }, requete);
+  return json(res, 200, { ok: true, plateformes }, autorise);
+}
+
 http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   const o = req.headers.origin;
@@ -871,6 +894,7 @@ http.createServer(async (req, res) => {
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/onedrive") return routeOneDrive(req, res, u).catch(e => { console.log("onedrive", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/mail/imap") return routeMailImap(req, res).catch(e => { console.log("mail", e.code || "erreur"); if (!res.headersSent) json(res, 500, { ok: false, message: "Erreur interne" }); });
+  if (u.pathname === "/plateformes") return routePlateformes(req, res, u).catch(e => { console.log("plateformes", e.stack); if (!res.headersSent) json(res, 500, { ok: false, message: "Erreur interne" }); });
   if (u.pathname === "/fiche") return routeFiche(req, res, u).catch(e => { console.log("fiche", e.message); if (!res.headersSent) json(res, 200, { ok: false, message: "Page illisible ou plateforme injoignable (" + e.message + ") : complétez à la main." }, req.headers.origin && ORIGINES.has(req.headers.origin) ? req.headers.origin : null); });
   if (u.pathname === "/analyse") return routeAnalyse(req, res, u).catch(e => { console.log("analyse", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });
   if (u.pathname === "/diagnostic" && u.searchParams.get("url")) {
