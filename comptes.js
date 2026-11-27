@@ -92,7 +92,13 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
 .cx-roue:hover{background:rgba(255,255,255,.15)}
 @media (max-width:900px){.bandeau-in{position:relative}.cx-roue{position:absolute;top:12px;right:14px}.bandeau .marque{padding-right:48px}}
 .cx-menu{max-width:calc(100vw - 16px)}
-.cx-roue svg{transition:transform .3s}.cx-roue:hover svg{transform:rotate(45deg)}`;
+.cx-roue svg{transition:transform .3s}.cx-roue:hover svg{transform:rotate(45deg)}
+.cx-demo-btn{background:#fff;color:var(--rouge,#d22d39);border:1.5px solid var(--rouge,#d22d39)}
+.cx-demo-btn:hover{background:var(--rouge-clair,#fdeced)}
+.cx-sep{display:flex;align-items:center;gap:10px;color:var(--gris,#5b6785);font-size:12px;margin:2px 0}.cx-sep::before,.cx-sep::after{content:"";flex:1;border-top:1px solid var(--trait,#d5ddef)}
+.cx-bandeau-demo{background:var(--rouge,#d22d39);color:#fff;font-size:13.5px;padding:7px 16px;display:flex;gap:6px 14px;align-items:center;justify-content:center;flex-wrap:wrap;text-align:center}
+.cx-bandeau-demo b{font-weight:800;letter-spacing:.04em}
+.cx-bandeau-demo button{background:#fff;color:var(--rouge,#d22d39);border:0;border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:12.5px}`;
   document.head.appendChild(css);
 
   const el = (tag, attrs = {}, ...enfants) => {
@@ -139,7 +145,11 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
       champ("Mot de passe", { type: "password", name: "motdepasse", autocomplete: "current-password", required: true }),
       msg, bouton("Se connecter", "btn-plein"),
       el("p", { class: "cx-petit" }, el("a", { href: "#", text: "Mot de passe oublié ?", onclick: e => { e.preventDefault(); v.remove(); ecranOubli(suite, form.email.value); } })));
-    const v = ecran(form, "Connectez-vous pour accéder à votre veille.");
+    const zoneDemo = el("div", { style: "display:grid;gap:8px", hidden: true },
+      el("div", { class: "cx-sep", text: "ou" }),
+      el("button", { type: "button", class: "btn cx-demo-btn", onclick: () => { v.remove(); lancerDemo(suite); } }, "Essayer la démo, sans inscription"),
+      el("p", { class: "cx-petit", text: "Un espace vierge pour découvrir Vigie : vous connectez votre propre drive et votre messagerie, jusqu'à " + MAX_DEMO + " dossiers de réponse, tout est effacé au bout de 48 heures." }));
+    const v = ecran([form, zoneDemo], "Connectez-vous pour accéder à votre veille.");
     form.onsubmit = async e => {
       e.preventDefault(); occupe(form, true, "Connexion…"); msg.className = "cx-msg"; msg.textContent = "";
       const t = patience(msg);
@@ -149,7 +159,62 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
       } catch (err) { clearTimeout(t); msg.className = "cx-msg err"; msg.textContent = err.message === "Failed to fetch" ? "Serveur injoignable, réessayez dans un instant." : err.message; occupe(form, false); }
     };
     // vérifie (et réveille le serveur) : propose l'installation s'il n'existe encore aucun compte
-    appel("etat").then(r => { if (!r.installe) { v.remove(); ecranInstallation(suite, r); } }).catch(() => {});
+    appel("etat").then(r => { if (!r.installe) { v.remove(); ecranInstallation(suite, r); } else if (r.demo) zoneDemo.hidden = false; }).catch(() => {});
+  }
+
+  /* ---------- accès démo ----------
+     Compte éphémère sans inscription (jeton du serveur valable 48 h, rien n'est gardé côté serveur).
+     L'espace démarre vierge (les données d'un compte déjà présent sur l'appareil sont mises de côté),
+     pas de synchronisation entre appareils, au plus MAX_DEMO dossiers « J'y réponds ».
+     En quittant la démo, ou à son expiration, tout ce qu'elle a laissé dans le navigateur est effacé. */
+  const MAX_DEMO = 3, CLE_DEMO = "vigie.demo.v1";
+  const enDemo = () => !!(session && session.compte && session.compte.role === "demo");
+  const estDemo = e => /@demo\.vigie-marches$/i.test(String(e || ""));
+  async function lancerDemo(suite) {
+    const msg = el("p", { class: "cx-msg info", role: "status", text: "Ouverture de la démo…" });
+    const v = ecran(el("div", { style: "display:grid;gap:12px" }, msg), "Démo");
+    const t = patience(msg);
+    try {
+      const r = await appel("demo", {});
+      clearTimeout(t); garder(r); v.remove(); entrer(suite);
+    } catch (err) {
+      clearTimeout(t); v.remove();
+      ecranConnexion(suite, err.message === "Failed to fetch" ? "Serveur injoignable, réessayez dans un instant." : err.message);
+    }
+  }
+  const lireDemo = () => { try { return JSON.parse(localStorage.getItem(CLE_DEMO) || "null") || { dossiers: [] }; } catch (e) { return { dossiers: [] }; } };
+  const dateHeure = x => new Date(x).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(" ", " à ");
+  // un dossier de réponse de plus ? (« J'y réponds » ou « 📁 Dossier de réponse ») ; refusé au-delà de MAX_DEMO
+  function demoDossier(m) {
+    if (!enDemo()) return true;
+    const id = String((m && m.idweb) || ""), d = lireDemo();
+    if (!id || d.dossiers.includes(id)) return true;
+    if (d.dossiers.length >= MAX_DEMO) { limiteDemo(); return false; }
+    d.dossiers.push(id);
+    try { localStorage.setItem(CLE_DEMO, JSON.stringify(d)); } catch (e) {}
+    majBandeauDemo();
+    return true;
+  }
+  function limiteDemo() {
+    const f = fenetre("Démo : " + MAX_DEMO + " dossiers au maximum", [
+      el("p", { class: "cx-msg info", text: "La démo permet de suivre " + MAX_DEMO + " dossiers de réponse de bout en bout, et vous les avez utilisés. Vous pouvez continuer à rechercher, lire et suivre les marchés, et à ouvrir les dossiers déjà créés." }),
+      el("p", { class: "cx-petit", style: "font-size:13.5px", text: "Pour répondre à davantage de marchés, demandez un compte Vigie." }),
+      el("div", { style: "display:flex;gap:8px;justify-content:flex-end" }, el("button", { type: "button", class: "btn btn-plein", onclick: () => f.close() }, "Compris"))]);
+  }
+  let bandeauDemo = null;
+  function majBandeauDemo() {
+    if (!enDemo()) { if (bandeauDemo) { bandeauDemo.remove(); bandeauDemo = null; } return; }
+    if (!bandeauDemo) { bandeauDemo = el("div", { class: "cx-bandeau-demo", role: "status" }); document.body.prepend(bandeauDemo); }
+    const n = lireDemo().dossiers.length, fin = session.compte.demo && session.compte.demo.fin;
+    bandeauDemo.replaceChildren(el("b", { text: "MODE DÉMO" }),
+      el("span", { text: n + " dossier" + (n > 1 ? "s" : "") + " sur " + MAX_DEMO + " utilisé" + (n > 1 ? "s" : "") + " · rien n'est gardé : tout est effacé" + (fin ? " le " + dateHeure(fin) : "") + " ou quand vous quittez la démo" }),
+      el("button", { type: "button", onclick: quitterDemo }, "Quitter la démo"));
+  }
+  // efface tout ce que la démo a laissé dans ce navigateur (marchés, statuts, drive, boîte mail, connexion Microsoft)
+  async function effacerDemo() { try { await ranger("efface:" + Date.now()); } catch (e) {} garder(null); }
+  async function quitterDemo() {
+    if (!confirm("Quitter la démo ? Tout ce que vous avez fait dans Vigie sera effacé de ce navigateur (les fichiers créés dans votre propre drive restent à vous).")) return;
+    await effacerDemo(); location.reload();
   }
   function ecranOubli(suite, adresse) {
     const msg = el("p", { class: "cx-msg", role: "alert" });
@@ -362,7 +427,7 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
     if (!btn || !session) return;
     btn.title = "Réglages · " + (session.compte.nom || session.compte.email);
   }
-  function deconnecter() { garder(null); location.reload(); }
+  async function deconnecter() { if (enDemo()) await effacerDemo(); else garder(null); location.reload(); }
   function cliquer(sel) { const b = document.querySelector(sel); if (b) b.click(); }
   function menu() {
     const ouvert = document.querySelector(".cx-menu"); if (ouvert) { ouvert.remove(); return; }
@@ -370,15 +435,16 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
     const item = (texte, action, cls) => el("button", { type: "button", role: "menuitem", class: cls || null, onclick: () => { m.remove(); action(); } }, texte);
     const synchro = window.Synchro && window.Synchro.etat();
     const m = el("div", { class: "cx-menu", role: "menu", style: `top:${r.bottom + window.scrollY + 6}px;right:${Math.max(8, document.documentElement.clientWidth - r.right)}px` },
-      el("div", { class: "cx-qui" }, el("b", { text: c.nom }), c.email + (c.societe ? " · " + c.societe.nom : "") + (c.role === "admin" ? " · administrateur Vigie" : c.role === "gerant" ? " · administrateur" : "")),
+      el("div", { class: "cx-qui" }, el("b", { text: c.nom }), enDemo() ? "Accès démo, sans compte" : c.email + (c.societe ? " · " + c.societe.nom : "") + (c.role === "admin" ? " · administrateur Vigie" : c.role === "gerant" ? " · administrateur" : "")),
       el("div", { class: "cx-titre", text: "Connexions" }),
       document.querySelector("#btnOd") ? item("☁  Mon drive (OneDrive, dossier du PC…)", () => cliquer("#btnOd")) : null,
       document.querySelector("#btnMail") ? item("✉  Alertes mail", () => cliquer("#btnMail")) : null,
       synchro ? el("div", { class: "cx-note", text: synchro }) : null,
-      el("div", { class: "cx-titre", text: "Mon compte" }),
-      item("🔑  Changer mon mot de passe", () => changerMotDePasse(false)),
+      el("div", { class: "cx-titre", text: enDemo() ? "Démo" : "Mon compte" }),
+      enDemo() ? el("div", { class: "cx-note", text: "Espace de démonstration : " + lireDemo().dossiers.length + " dossier(s) sur " + MAX_DEMO + ", aucune synchronisation, tout est effacé en quittant." }) : null,
+      enDemo() ? null : item("🔑  Changer mon mot de passe", () => changerMotDePasse(false)),
       c.role === "admin" || c.role === "gerant" ? item("👥  Gérer les comptes", gererComptes) : null,
-      item("↩  Se déconnecter", deconnecter, "rouge"));
+      enDemo() ? item("↩  Quitter la démo (tout effacer)", quitterDemo, "rouge") : item("↩  Se déconnecter", deconnecter, "rouge"));
     document.body.appendChild(m);
     setTimeout(() => document.addEventListener("click", function f(e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener("click", f); } }), 0);
   }
@@ -409,7 +475,7 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
     const local = {}; cles.forEach(k => { local[k] = ls.getItem(k); });
     let racine = null; try { racine = await idbFaire("readonly", s => s.get("racine")); } catch (e) {}
     let deja = null; try { deja = await idbFaire("readonly", s => s.get("espace:" + proprio)); } catch (e) {}
-    if (!deja && !proprio.startsWith("efface:") && (cles.length || racine)) await idbFaire("readwrite", s => s.put({ local, racine: racine || null, le: new Date().toISOString() }, "espace:" + proprio));
+    if (!deja && !proprio.startsWith("efface:") && !estDemo(proprio) && (cles.length || racine)) await idbFaire("readwrite", s => s.put({ local, racine: racine || null, le: new Date().toISOString() }, "espace:" + proprio));
     cles.forEach(k => ls.removeItem(k));
     try { await idbFaire("readwrite", s => s.delete("racine")); } catch (e) {}
   }
@@ -465,12 +531,15 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
     // l'appli a déjà lu les données au chargement : si elles appartenaient à un autre compte, on les range puis on recharge
     try { if (await basculerCompte(String(session.compte.email || "").toLowerCase())) { location.reload(); return; } }
     catch (e) { console.log("Espace du compte", e && e.message); }
-    poserBouton();
-    if (!suiteLancee) { suiteLancee = true; suite(); if (window.Synchro) window.Synchro.demarrer(session.compte.email); }
+    poserBouton(); majBandeauDemo();
+    if (enDemo() && session.compte.demo && session.compte.demo.fin) setTimeout(sessionPerdue, Math.min(2e9, Math.max(1000, session.compte.demo.fin - Date.now())));
+    // démo : pas de copie dans le OneDrive (synchronisation entre appareils)
+    if (!suiteLancee) { suiteLancee = true; suite(); if (window.Synchro && !enDemo()) window.Synchro.demarrer(session.compte.email); }
     if (session.compte.provisoire) changerMotDePasse(true);
   }
   function sessionPerdue() {
     if (document.querySelector(".cx-voile")) return;
+    if (enDemo()) { effacerDemo().then(() => { session = null; majBandeauDemo(); ecranConnexion(() => location.reload(), "La démo est terminée : tout ce qu'elle contenait a été effacé de ce navigateur."); }); return; }
     garder(session && { compte: session.compte }); // garde l'adresse pour pré-remplir
     session = null;
     ecranConnexion(() => {}, "Votre session a expiré : reconnectez-vous pour continuer.");
@@ -479,6 +548,14 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
     // lien « mot de passe oublié » reçu par mail : #reinit=jeton
     const m = /[#&]reinit=([\w.-]+)/.exec(location.hash);
     if (m) { history.replaceState(null, "", location.pathname + location.search); garder(null); return ecranReinitialisation(suite, m[1]); }
+    // lien direct vers la démo : https://vigie-marches.onrender.com/#demo
+    const versDemo = /^#demo\b/.test(location.hash);
+    if (versDemo) history.replaceState(null, "", location.pathname + location.search);
+    if (session && session.compte && session.compte.role === "demo" && (!session.jeton || expire(session.jeton))) {
+      // démo expirée : on efface ce qu'elle a laissé avant toute chose
+      return effacerDemo().then(() => { const reste = () => (versDemo ? lancerDemo(suite) : ecranConnexion(suite, "La démo est terminée : tout ce qu'elle contenait a été effacé de ce navigateur.")); reste(); });
+    }
+    if (versDemo && !(session && session.jeton && !expire(session.jeton))) return lancerDemo(suite);
     if (!session || !session.jeton || expire(session.jeton)) return ecranConnexion(suite);
     entrer(suite);
     // en arrière-plan : vérifie le compte et renouvelle le jeton des liens
@@ -489,5 +566,5 @@ dialog.cx-dlg.cx-large{width:min(900px,calc(100% - 32px))}
   window.addEventListener("hashchange", () => { if (/[#&]reinit=/.test(location.hash)) location.reload(); });
   // « Repartir de zéro sur cet appareil » : tout ce compte Vigie redevient vierge ici (son fichier OneDrive de synchronisation reste)
   async function repartirDeZero() { await ranger("efface:" + Date.now()); location.reload(); }
-  window.Comptes = { demarrer, deconnecter, repartirDeZero, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
+  window.Comptes = { demarrer, deconnecter, repartirDeZero, demoDossier, enDemo, session: () => session, chiffrer: texte => appel("chiffrer", { texte }).then(r => r.chiffre) };
 })();
