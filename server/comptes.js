@@ -13,6 +13,14 @@ const SECRET = process.env.VIGIE_SECRET || (console.log("ATTENTION : VIGIE_SECRE
 const DUREE_SESSION = 30 * 864e5; // 30 jours
 const DUREE_LIEN = 7 * 864e5;     // liens ouverts dans un nouvel onglet (DCE, RC)
 const MIN_MDP = 10;
+// accès démo (« Essayer la démo ») : compte éphémère, rien n'est enregistré côté serveur.
+// Le jeton porte tout (adresse tirée au hasard, d: 1) ; il expire au bout de DUREE_DEMO.
+// VIGIE_DEMO=non dans Render coupe l'accès démo.
+const DUREE_DEMO = 48 * 3600e3;
+const MAX_DOSSIERS_DEMO = 3;
+const demoOuverte = () => !/^(non|0|false|off)$/i.test(String(process.env.VIGIE_DEMO || "").trim());
+const DOMAINE_DEMO = "@demo.vigie-marches";
+const compteDemo = (e, x) => ({ e, n: "Visiteur (démo)", r: "demo", s: "demo:" + e, v: 0, demo: true, fin: x });
 
 /* ---------- comptes et sociétés en mémoire (copie de la base, relue au démarrage) ---------- */
 // compte : { e: mail, n: nom, r: "admin" (administrateur Vigie) | "gerant" (administrateur de sa société) | "utilisateur",
@@ -79,13 +87,16 @@ const mdpProvisoire = () => {
 };
 const mailValide = e => /^[^\s@<>"]{1,64}@[^\s@<>"]{1,190}\.[a-z]{2,24}$/i.test(e);
 const publicSociete = x => x && ({ id: x.id, nom: x.nom, places: x.places, actif: x.actif, cree: x.c });
-const publicCompte = c => { const x = societes.get(c.s); return { email: c.e, nom: c.n, role: c.r, provisoire: !!c.t, cree: c.c, societe: x ? { id: x.id, nom: x.nom } : null }; };
+const publicCompte = c => { if (c.demo) return { email: c.e, nom: c.n, role: "demo", demo: { fin: c.fin, dossiers: MAX_DOSSIERS_DEMO }, societe: null }; const x = societes.get(c.s); return { email: c.e, nom: c.n, role: c.r, provisoire: !!c.t, cree: c.c, societe: x ? { id: x.id, nom: x.nom } : null }; };
 // accès suspendu quand la société est désactivée (abonnement arrêté) ; jamais pour un administrateur Vigie
-const accesOuvert = c => c.r === "admin" || !!(societes.get(c.s) || {}).actif;
+const accesOuvert = c => c.r === "admin" || (c.demo ? demoOuverte() : !!(societes.get(c.s) || {}).actif);
 
 /* ---------- jetons signés ---------- */
 function signer(c, type) {
-  const p = b64(JSON.stringify({ e: c.e, v: c.v, t: type, x: Date.now() + (type === "l" ? DUREE_LIEN : type === "r" ? DUREE_REINIT : DUREE_SESSION) }));
+  const duree = type === "l" ? DUREE_LIEN : type === "r" ? DUREE_REINIT : DUREE_SESSION;
+  // démo : ni lien de mot de passe, et rien au-delà de la fin de la démo
+  const p = c.demo ? b64(JSON.stringify({ e: c.e, v: 0, t: type, d: 1, x: Math.min(Date.now() + duree, c.fin) }))
+    : b64(JSON.stringify({ e: c.e, v: c.v, t: type, x: Date.now() + duree }));
   return p + "." + crypto.createHmac("sha256", SECRET).update(p).digest("base64url");
 }
 function lireJeton(j, type) {
@@ -95,6 +106,7 @@ function lireJeton(j, type) {
   if (!egaux(s, attendu)) return null;
   let d; try { d = JSON.parse(Buffer.from(p, "base64url").toString("utf8")); } catch (e) { return null; }
   if (d.t !== type || !(d.x > Date.now())) return null;
+  if (d.d) return type !== "r" && String(d.e).endsWith(DOMAINE_DEMO) && demoOuverte() ? compteDemo(d.e, d.x) : null;
   const c = comptes.get(d.e);
   return c && c.v === d.v && accesOuvert(c) ? c : null;
 }
@@ -201,7 +213,7 @@ async function routeCompte(req, res, u, outils) {
 
 async function routes(req, res, u, { json, lireCorps, ip }) {
   const chemin = u.pathname.slice("/compte/".length);
-  if (chemin === "etat") return json(res, 200, { installe: comptes.size > 0, installable: !!process.env.VIGIE_CODE_INSTALLATION, oubli: mailConfigure(), sauvegardeAuto: sauvegardeAutomatique(), base: enBase() });
+  if (chemin === "etat") return json(res, 200, { demo: demoOuverte() && comptes.size > 0, installe: comptes.size > 0, installable: !!process.env.VIGIE_CODE_INSTALLATION, oubli: mailConfigure(), sauvegardeAuto: sauvegardeAutomatique(), base: enBase() });
   if (req.method !== "POST" && !["moi", "liste", "sauvegarde", "copies"].includes(chemin)) return json(res, 405, { message: "POST attendu" });
   let c = {};
   if (req.method === "POST") { try { c = JSON.parse(await lireCorps(req, 4000) || "{}"); } catch (e) { return json(res, 400, { message: "Demande illisible." }); } }
@@ -229,6 +241,16 @@ async function routes(req, res, u, { json, lireCorps, ip }) {
     if (!accesOuvert(compte)) return json(res, 403, { message: "L'accès de votre société à Vigie est suspendu. Contactez l'administrateur de Vigie." });
     console.log(new Date().toISOString(), "Comptes : connexion", email);
     return json(res, 200, sessionDe(compte));
+  }
+
+  // « Essayer la démo » : compte éphémère, sans inscription, vierge, rien d'enregistré côté serveur
+  if (chemin === "demo") {
+    if (!demoOuverte()) return json(res, 403, { message: "L'accès démo est fermé pour le moment." });
+    if (bloque("demo:" + ip)) return json(res, 429, { message: "Trop de démos ouvertes depuis cette connexion : réessayez dans 15 minutes." });
+    echec("demo:" + ip);
+    const c = compteDemo("demo-" + crypto.randomBytes(6).toString("hex") + DOMAINE_DEMO, Date.now() + DUREE_DEMO);
+    console.log(new Date().toISOString(), "Comptes : démo ouverte");
+    return json(res, 200, sessionDe(c));
   }
 
   // mot de passe oublié : lien envoyé par mail si l'adresse a un compte (même réponse dans tous les cas)
@@ -274,6 +296,7 @@ async function routes(req, res, u, { json, lireCorps, ip }) {
     return json(res, 200, { chiffre: chiffrer(texte, moi.e) });
   }
 
+  if (moi.demo && chemin !== "moi" && chemin !== "chiffrer") return json(res, 403, { message: "Indisponible dans la démo." });
   if (chemin === "motdepasse") {
     if (bloque("mdp:" + moi.e)) return json(res, 429, { message: "Trop d'essais, réessayez dans 15 minutes." });
     if (!verifierMdp(c.ancien || "", moi.h)) { echec("mdp:" + moi.e); return json(res, 403, { message: "Mot de passe actuel incorrect." }); }

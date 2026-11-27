@@ -889,6 +889,11 @@ http.createServer(async (req, res) => {
     }
     if (u.pathname === "/diagnostic" && req.compte.r !== "admin") return json(res, 403, { message: "Réservé à l'administrateur." });
   }
+  // démo : pas de travail d'équipe, rien n'est enregistré sur le serveur
+  if (u.pathname.startsWith("/equipe/") && req.compte.demo) {
+    if (u.pathname === "/equipe/liste") return json(res, 200, { entrees: [], membres: [{ email: req.compte.e, nom: req.compte.n, role: "utilisateur" }], moi: req.compte.e, chef: false, partage: false });
+    return json(res, 403, { message: "Indisponible dans la démo." });
+  }
   if (u.pathname.startsWith("/equipe/")) return routeEquipe(req, res, u, { json, lireCorps }).catch(e => { console.log("equipe", e.stack); if (!res.headersSent) json(res, 500, { message: "Erreur interne" }); });
   if (u.pathname === "/dce/captcha") return routeCaptcha(req, res).catch(e => { console.log("captcha", e.stack); if (!res.headersSent) pageErreur(res, 500, e.message); else res.end(); });
   if (u.pathname === "/onedrive/dce") return routeOneDriveFichier(req, res).catch(e => { console.log("onedrive/dce", e.stack); if (!res.headersSent) json(res, 500, { erreur: "interne", message: e.message }); });

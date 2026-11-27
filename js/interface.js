@@ -4,6 +4,8 @@
 function snapshot(m){ const {source,nbLots,horsBoamp,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description,lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs,villeAcheteur,accordCadre,manuel,lienSaisi,siretAcheteur}=m; return {...(source?{source,nbLots,horsBoamp}:{}),siretAcheteur,manuel,lienSaisi,villeAcheteur,accordCadre,idweb,objet,acheteur,parution,limite,types,deps,descripteurs,procedure,famille,nature,urlAvis,description:(description||"").slice(0,1500),lieu,duree,montant,lots,cpv,urlDocs,urlDepot,urlProfil,urls,refAcheteur,refDocs}; }
 function changerStatut(m,k){
   const actuel=statuts[m.idweb]&&statuts[m.idweb].statut;
+  // accès démo : 3 dossiers « J'y réponds » au plus
+  if(k==="reponse"&&actuel!=="reponse"&&window.Comptes&&Comptes.demoDossier&&!Comptes.demoDossier(m)) return;
   // travail d'équipe : un marché « J'y réponds » n'est pris que par un collaborateur de la société
   if(k==="reponse"&&actuel!=="reponse"&&equipeVisible()){
     if(!equipePeutPrendre(m)) return;

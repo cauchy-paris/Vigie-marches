@@ -204,6 +204,7 @@ async function deposerRaccourciEnLigne(jeton,driveId,dossierId,m,liens,raison,J)
 let preparationEnCours=false;
 async function preparerDossier(m){
   if(preparationEnCours) return;
+  if(window.Comptes&&Comptes.demoDossier&&!Comptes.demoDossier(m)) return; // accès démo : 3 dossiers au plus
   const od=lire(CLE_OD,null);
   if(msConfigure()&&od&&(msCompte()||!FS_OK)){ preparationEnCours=true; try{ await preparerEnLigne(m,od); }finally{ preparationEnCours=false; } return; }
   if(!FS_OK){ toast(msConfigure()?"Connectez-vous à Microsoft dans l'onglet Mes marchés":"Création du dossier : utilisez Chrome ou Edge sur PC"); return; }
